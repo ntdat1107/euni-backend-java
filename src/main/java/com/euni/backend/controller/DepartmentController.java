@@ -14,28 +14,28 @@ import java.util.UUID;
 @RequestMapping("/api/departments")
 @RequiredArgsConstructor
 @CrossOrigin(origins = "*", maxAge = 3600)
-public class DepartmentController {
+public class DepartmentController extends BaseController {
 
     private final DepartmentService departmentService;
 
     @GetMapping
     public ResponseEntity<ApiResponse<List<DepartmentDto>>> getAllDepartments() {
-        return ResponseEntity.ok(ApiResponse.success(departmentService.getAllDepartments()));
+        return ok(departmentService.getAllDepartments());
     }
 
     @PostMapping
     public ResponseEntity<ApiResponse<DepartmentDto>> createDepartment(@RequestBody DepartmentDto dto) {
-        return ResponseEntity.ok(ApiResponse.success(departmentService.createDepartment(dto)));
+        return ok(departmentService.createDepartment(dto));
     }
 
     @PutMapping("/{id}")
     public ResponseEntity<ApiResponse<DepartmentDto>> updateDepartment(@PathVariable UUID id, @RequestBody DepartmentDto dto) {
-        return ResponseEntity.ok(ApiResponse.success(departmentService.updateDepartment(id, dto)));
+        return ok(departmentService.updateDepartment(id, dto));
     }
 
     @DeleteMapping("/{id}")
     public ResponseEntity<ApiResponse<Void>> deleteDepartment(@PathVariable UUID id) {
         departmentService.deleteDepartment(id);
-        return ResponseEntity.ok(ApiResponse.success(null));
+        return ok(null);
     }
 }

@@ -13,13 +13,13 @@ import org.springframework.web.bind.annotation.*;
 @RequestMapping("/api/auth")
 @RequiredArgsConstructor
 @CrossOrigin(origins = "*", maxAge = 3600)
-public class AuthController {
+public class AuthController extends BaseController {
 
     private final AuthService authService;
 
     @PostMapping("/login")
     public ResponseEntity<ApiResponse<TokenResponse>> authenticateUser(@Valid @RequestBody LoginRequest loginRequest) {
-        return ResponseEntity.ok(ApiResponse.success(authService.authenticateUser(loginRequest)));
+        return ok(authService.authenticateUser(loginRequest));
     }
 
     @PostMapping("/refresh-token")
@@ -28,6 +28,6 @@ public class AuthController {
         if (refreshToken == null || refreshToken.isBlank()) {
             throw new RuntimeException("Refresh token is required");
         }
-        return ResponseEntity.ok(ApiResponse.success(authService.refreshToken(refreshToken)));
+        return ok(authService.refreshToken(refreshToken));
     }
 }

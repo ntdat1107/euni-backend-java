@@ -20,6 +20,10 @@ import org.springframework.stereotype.Service;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import static io.jsonwebtoken.SignatureAlgorithm.*;
+import static io.jsonwebtoken.security.Keys.*;
+import static java.nio.charset.StandardCharsets.*;
+
 @Service
 @RequiredArgsConstructor
 public class AuthService {
@@ -51,7 +55,7 @@ public class AuthService {
                 .claim("isRefreshToken", true)
                 .setIssuedAt(new Date())
                 .setExpiration(new Date((new Date()).getTime() + 604800000)) // 7 days
-                .signWith(io.jsonwebtoken.security.Keys.hmacShaKeyFor(jwtUtils.getJwtSecret().getBytes(java.nio.charset.StandardCharsets.UTF_8)), io.jsonwebtoken.SignatureAlgorithm.HS256)
+                .signWith(hmacShaKeyFor(jwtUtils.getJwtSecret().getBytes(UTF_8)), HS256)
                 .compact();
 
         return TokenResponse.builder()
