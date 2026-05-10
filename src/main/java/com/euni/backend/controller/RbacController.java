@@ -24,7 +24,6 @@ public class RbacController extends BaseController {
     private final PermissionService permissionService;
 
     @GetMapping("/roles")
-    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<List<RoleDto>>> getAllRoles() {
         return ok(roleService.getAllRoles());
     }
@@ -51,7 +50,6 @@ public class RbacController extends BaseController {
     }
 
     @GetMapping("/permissions")
-    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<List<PermissionDto>>> getAllPermissions() {
         return ok(permissionService.getAllPermissions());
     }

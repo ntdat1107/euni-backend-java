@@ -2,20 +2,21 @@ package com.euni.backend.entity;
 
 import jakarta.persistence.*;
 import lombok.*;
-import org.hibernate.annotations.CreationTimestamp;
-import org.hibernate.annotations.UpdateTimestamp;
+import org.hibernate.annotations.SQLDelete;
+import org.hibernate.annotations.SQLRestriction;
 
-import java.time.ZonedDateTime;
 import java.util.UUID;
 
 @Entity
-@Table(name = "departments")
+@Table(name = "faculties")
 @Getter
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class Department {
+@SQLDelete(sql = "UPDATE faculties SET is_deleted = true WHERE id=?")
+@SQLRestriction("is_deleted = false")
+public class Faculty extends BaseEntity {
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
@@ -27,12 +28,4 @@ public class Department {
     private String code;
 
     private String description;
-
-    @CreationTimestamp
-    @Column(name = "created_at", updatable = false)
-    private ZonedDateTime createdAt;
-
-    @UpdateTimestamp
-    @Column(name = "updated_at")
-    private ZonedDateTime updatedAt;
 }

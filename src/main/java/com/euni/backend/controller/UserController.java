@@ -25,6 +25,11 @@ public class UserController extends BaseController {
         return ok(userService.getAllUsers());
     }
 
+    @GetMapping("/me")
+    public ResponseEntity<ApiResponse<UserDto>> getMe(java.security.Principal principal) {
+        return ok(userService.getUserByUsername(principal.getName()));
+    }
+
     @GetMapping("/{id}")
     @PreAuthorize("hasRole('ADMIN') or principal.username == #id")
     public ResponseEntity<ApiResponse<UserDto>> getUserById(@PathVariable UUID id) {

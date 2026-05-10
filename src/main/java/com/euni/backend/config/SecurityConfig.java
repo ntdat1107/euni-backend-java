@@ -47,7 +47,12 @@ public class SecurityConfig {
                     .authenticationEntryPoint((request, response, authException) -> {
                         response.setContentType("application/json;charset=UTF-8");
                         response.setStatus(jakarta.servlet.http.HttpServletResponse.SC_UNAUTHORIZED);
-                        response.getWriter().write("{\"success\": false, \"message\": \"Không có quyền truy cập. Vui lòng đăng nhập lại.\"}");
+                        response.getWriter().write("{\"success\": false, \"code\": \"UNAUTHORIZED\", \"message\": \"Phiên đăng nhập hết hạn hoặc không hợp lệ. Vui lòng đăng nhập lại.\"}");
+                    })
+                    .accessDeniedHandler((request, response, accessDeniedException) -> {
+                        response.setContentType("application/json;charset=UTF-8");
+                        response.setStatus(jakarta.servlet.http.HttpServletResponse.SC_FORBIDDEN);
+                        response.getWriter().write("{\"success\": false, \"code\": \"FORBIDDEN\", \"message\": \"Bạn không có quyền thực hiện hành động này.\"}");
                     })
                 );
 

@@ -2,12 +2,12 @@ package com.euni.backend.service;
 
 import com.euni.backend.dto.UserDto;
 import com.euni.backend.entity.User;
+import com.euni.backend.entity.Faculty;
+import com.euni.backend.repository.FacultyRepository;
 import com.euni.backend.entity.Role;
-import com.euni.backend.entity.Department;
 import com.euni.backend.mapper.UserMapper;
 import com.euni.backend.repository.UserRepository;
 import com.euni.backend.repository.RoleRepository;
-import com.euni.backend.repository.DepartmentRepository;
 import com.euni.backend.enums.UserStatus;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -24,7 +24,7 @@ public class UserService {
 
     private final UserRepository userRepository;
     private final RoleRepository roleRepository;
-    private final DepartmentRepository departmentRepository;
+    private final FacultyRepository facultyRepository;
     private final UserMapper userMapper;
     private final PasswordEncoder passwordEncoder;
 
@@ -38,6 +38,13 @@ public class UserService {
     @Transactional(readOnly = true)
     public UserDto getUserById(UUID id) {
         User user = userRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+        return userMapper.toDto(user);
+    }
+
+    @Transactional(readOnly = true)
+    public UserDto getUserByUsername(String username) {
+        User user = userRepository.findByUsername(username)
                 .orElseThrow(() -> new RuntimeException("User not found"));
         return userMapper.toDto(user);
     }
@@ -64,10 +71,10 @@ public class UserService {
             user.setStatus(UserStatus.PENDING.getValue());
         }
         
-        // Map Department
-        if (userDto.getDepartment() != null) {
-            departmentRepository.findByCode(userDto.getDepartment())
-                    .ifPresent(user::setDepartment);
+        // Map Faculty
+        if (userDto.getFaculty() != null) {
+            facultyRepository.findByCode(userDto.getFaculty())
+                    .ifPresent(user::setFaculty);
         }
         
         // Map Roles
@@ -94,10 +101,10 @@ public class UserService {
         user.setPhone(userDto.getPhone());
         user.setEmployeeId(userDto.getEmployeeId());
         
-        // Update Department
-        if (userDto.getDepartment() != null) {
-            departmentRepository.findByCode(userDto.getDepartment())
-                    .ifPresent(user::setDepartment);
+        // Update Faculty
+        if (userDto.getFaculty() != null) {
+            facultyRepository.findByCode(userDto.getFaculty())
+                    .ifPresent(user::setFaculty);
         }
         
         // Update Roles

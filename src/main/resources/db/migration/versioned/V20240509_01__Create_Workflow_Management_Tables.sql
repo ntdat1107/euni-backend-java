@@ -1,5 +1,8 @@
 -- V20240509_01__Create_Workflow_Management_Tables.sql
 
+DROP TABLE IF EXISTS workflow_template_drafts;
+DROP TABLE IF EXISTS workflow_templates;
+
 CREATE TABLE workflow_templates (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     code VARCHAR(100) NOT NULL,
@@ -19,7 +22,9 @@ CREATE TABLE workflow_template_drafts (
     code VARCHAR(100),
     xml_content TEXT NOT NULL,
     last_saved_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT fk_draft_template FOREIGN KEY (template_id) REFERENCES workflow_templates(id) ON DELETE CASCADE
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+CONSTRAINT fk_draft_template FOREIGN KEY (template_id) REFERENCES workflow_templates(id) ON DELETE CASCADE
 );
 
 CREATE INDEX idx_workflow_templates_code ON workflow_templates(code);

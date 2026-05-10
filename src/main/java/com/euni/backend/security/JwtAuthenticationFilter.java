@@ -50,7 +50,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                     log.error("Token version mismatch or user not found. Invalidating token.");
                     response.setContentType("application/json;charset=UTF-8");
                     response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-                    response.getWriter().write("{\"success\": false, \"message\": \"Phiên đăng nhập đã hết hạn hoặc bị vô hiệu hoá. Vui lòng đăng nhập lại.\"}");
+                    response.getWriter().write("{\"success\": false, \"code\": \"UNAUTHORIZED\", \"message\": \"Phiên đăng nhập đã hết hạn hoặc bị vô hiệu hoá.\"}");
                     return;
                 }
             }

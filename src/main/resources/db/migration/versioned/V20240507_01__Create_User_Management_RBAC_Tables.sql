@@ -5,8 +5,16 @@
 -- Extension for UUID generation
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
--- 1. Departments Table
-CREATE TABLE departments (
+
+DROP TABLE IF EXISTS role_permissions CASCADE;
+DROP TABLE IF EXISTS user_roles CASCADE;
+DROP TABLE IF EXISTS roles CASCADE;
+DROP TABLE IF EXISTS permissions CASCADE;
+DROP TABLE IF EXISTS users CASCADE;
+DROP TABLE IF EXISTS faculties CASCADE;
+
+-- 1. Faculties Table
+CREATE TABLE faculties (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     name VARCHAR(255) NOT NULL,
     code VARCHAR(50) UNIQUE NOT NULL,
@@ -43,7 +51,7 @@ CREATE TABLE users (
     full_name VARCHAR(100) NOT NULL,
     password_hash VARCHAR(255),
     employee_id VARCHAR(50) UNIQUE,
-    department_id UUID REFERENCES departments(id) ON DELETE SET NULL,
+    faculty_id UUID REFERENCES faculties(id) ON DELETE SET NULL,
     phone VARCHAR(20),
     status VARCHAR(20) DEFAULT 'Inactive',
     created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,

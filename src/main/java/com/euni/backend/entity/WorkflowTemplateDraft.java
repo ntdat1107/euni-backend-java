@@ -3,7 +3,9 @@ package com.euni.backend.entity;
 import com.euni.backend.entity.enums.WorkflowStatus;
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.SQLDelete;
 import org.hibernate.annotations.UpdateTimestamp;
+import org.hibernate.annotations.SQLRestriction;
 
 import java.time.ZonedDateTime;
 import java.util.UUID;
@@ -15,7 +17,9 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class WorkflowTemplateDraft {
+@SQLDelete(sql = "UPDATE workflow_template_drafts SET is_deleted = true WHERE id=?")
+@SQLRestriction("is_deleted = false")
+public class WorkflowTemplateDraft extends BaseEntity {
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;

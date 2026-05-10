@@ -18,7 +18,7 @@ public class UserDto {
     private String email;
     private String fullName;
     private String employeeId;
-    private String department;
+    private String faculty;
     private String phone;
     private String status;
     private List<String> roles;

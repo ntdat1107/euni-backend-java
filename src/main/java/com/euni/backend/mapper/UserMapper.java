@@ -13,11 +13,11 @@ import java.util.stream.Collectors;
 @Mapper(componentModel = "spring")
 public interface UserMapper {
 
-    @Mapping(target = "department", source = "department.code")
+    @Mapping(target = "faculty", source = "faculty.code")
     @Mapping(target = "roles", expression = "java(mapRoles(user.getRoles()))")
     UserDto toDto(User user);
 
-    @Mapping(target = "department", ignore = true)
+    @Mapping(target = "faculty", ignore = true)
     @Mapping(target = "roles", ignore = true)
     User toEntity(UserDto dto);
 

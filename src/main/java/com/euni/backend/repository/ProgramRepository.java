@@ -1,18 +1,17 @@
 package com.euni.backend.repository;
 
-import com.euni.backend.entity.Role;
+import com.euni.backend.entity.Program;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
-import java.util.Optional;
 import java.util.UUID;
 
 @Repository
-public interface RoleRepository extends JpaRepository<Role, UUID> {
-    @EntityGraph(attributePaths = {"permissions"})
-    List<Role> findAll();
+public interface ProgramRepository extends JpaRepository<Program, UUID> {
+    @EntityGraph(attributePaths = {"major"})
+    List<Program> findAll();
 
-    Optional<Role> findByCode(String code);
+    boolean existsByCode(String code);
 }
