@@ -14,8 +14,6 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-@SQLDelete(sql = "UPDATE permissions SET is_deleted = true WHERE id=?")
-@SQLRestriction("is_deleted = false")
 public class Permission extends BaseEntity {
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)

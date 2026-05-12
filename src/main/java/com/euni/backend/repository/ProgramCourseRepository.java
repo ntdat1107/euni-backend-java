@@ -5,6 +5,7 @@ import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
@@ -14,9 +15,12 @@ import java.util.UUID;
 @Repository
 public interface ProgramCourseRepository extends JpaRepository<ProgramCourse, UUID> {
     @EntityGraph(attributePaths = {"course"})
-    List<ProgramCourse> findAllByProgramId(UUID programId);
+    @Query("SELECT pc FROM ProgramCourse pc WHERE pc.program.id = :programId AND pc.deleted = false")
+    List<ProgramCourse> findAllByProgramId(@Param("programId") UUID programId);
 
-    Optional<ProgramCourse> findByProgramIdAndCourseId(UUID programId, UUID courseId);
+    @Query("SELECT pc FROM ProgramCourse pc WHERE pc.program.id = :programId AND pc.course.id = :courseId AND pc.deleted = false")
+    Optional<ProgramCourse> findByProgramIdAndCourseId(@Param("programId") UUID programId, @Param("courseId") UUID courseId);
+
 
     @Query(value = "SELECT * FROM program_courses WHERE program_id = :programId AND course_id = :courseId", nativeQuery = true)
     Optional<ProgramCourse> findByProgramIdAndCourseIdIncludingDeleted(UUID programId, UUID courseId);

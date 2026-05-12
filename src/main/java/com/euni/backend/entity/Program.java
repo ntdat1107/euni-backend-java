@@ -15,8 +15,6 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-@SQLDelete(sql = "UPDATE programs SET is_deleted = true WHERE id=?")
-@SQLRestriction("is_deleted = false")
 public class Program extends BaseEntity {
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)

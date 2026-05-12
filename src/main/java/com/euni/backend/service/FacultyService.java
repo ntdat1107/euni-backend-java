@@ -19,7 +19,7 @@ public class FacultyService {
 
     @Transactional(readOnly = true)
     public List<FacultyDto> getAllFaculties() {
-        return facultyRepository.findAll().stream()
+        return facultyRepository.findAllActive().stream()
                 .map(this::toDto)
                 .collect(Collectors.toList());
     }
@@ -39,7 +39,7 @@ public class FacultyService {
 
     @Transactional
     public FacultyDto updateFaculty(UUID id, FacultyDto dto) {
-        Faculty faculty = facultyRepository.findById(id)
+        Faculty faculty = facultyRepository.findActiveById(id)
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy khoa"));
         
         facultyRepository.findByCode(dto.getCode()).ifPresent(f -> {
@@ -57,10 +57,10 @@ public class FacultyService {
 
     @Transactional
     public void deleteFaculty(UUID id) {
-        if (!facultyRepository.existsById(id)) {
-            throw new RuntimeException("Không tìm thấy khoa");
-        }
-        facultyRepository.deleteById(id);
+        Faculty faculty = facultyRepository.findActiveById(id)
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy khoa"));
+        faculty.setDeleted(true);
+        facultyRepository.save(faculty);
     }
 
     private FacultyDto toDto(Faculty faculty) {

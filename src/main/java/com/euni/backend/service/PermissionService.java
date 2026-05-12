@@ -21,7 +21,7 @@ public class PermissionService {
 
     @Transactional(readOnly = true)
     public List<PermissionDto> getAllPermissions() {
-        return permissionRepository.findAll().stream()
+        return permissionRepository.findAllActive().stream()
                 .map(permissionMapper::toDto)
                 .collect(Collectors.toList());
     }
@@ -34,6 +34,9 @@ public class PermissionService {
 
     @Transactional
     public void deletePermission(UUID id) {
-        permissionRepository.deleteById(id);
+        Permission permission = permissionRepository.findActiveById(id)
+                .orElseThrow(() -> new RuntimeException("Permission not found"));
+        permission.setDeleted(true);
+        permissionRepository.save(permission);
     }
 }

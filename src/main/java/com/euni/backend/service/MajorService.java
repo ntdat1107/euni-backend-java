@@ -22,7 +22,7 @@ public class MajorService {
 
     @Transactional(readOnly = true)
     public List<MajorDto> getAllMajors() {
-        return majorRepository.findAll().stream()
+        return majorRepository.findAllActive().stream()
                 .map(this::toDto)
                 .collect(Collectors.toList());
     }
@@ -35,7 +35,7 @@ public class MajorService {
         
         Faculty faculty = null;
         if (dto.getFacultyId() != null) {
-            faculty = facultyRepository.findById(dto.getFacultyId())
+            faculty = facultyRepository.findActiveById(dto.getFacultyId())
                     .orElseThrow(() -> new RuntimeException("Không tìm thấy khoa"));
         }
 
@@ -51,7 +51,7 @@ public class MajorService {
 
     @Transactional
     public MajorDto updateMajor(UUID id, MajorDto dto) {
-        Major major = majorRepository.findById(id)
+        Major major = majorRepository.findActiveById(id)
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy ngành học"));
         
         if (!major.getCode().equals(dto.getCode()) && majorRepository.existsByCode(dto.getCode())) {
@@ -60,7 +60,7 @@ public class MajorService {
 
         Faculty faculty = null;
         if (dto.getFacultyId() != null) {
-            faculty = facultyRepository.findById(dto.getFacultyId())
+            faculty = facultyRepository.findActiveById(dto.getFacultyId())
                     .orElseThrow(() -> new RuntimeException("Không tìm thấy khoa"));
         }
 
@@ -74,10 +74,10 @@ public class MajorService {
 
     @Transactional
     public void deleteMajor(UUID id) {
-        if (!majorRepository.existsById(id)) {
-            throw new RuntimeException("Không tìm thấy ngành học");
-        }
-        majorRepository.deleteById(id);
+        Major major = majorRepository.findActiveById(id)
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy ngành học"));
+        major.setDeleted(true);
+        majorRepository.save(major);
     }
 
     private MajorDto toDto(Major major) {

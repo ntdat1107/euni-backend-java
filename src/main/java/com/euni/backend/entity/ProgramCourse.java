@@ -3,7 +3,6 @@ package com.euni.backend.entity;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.SQLDelete;
-import org.hibernate.annotations.SQLRestriction;
 
 import java.util.UUID;
 
@@ -16,8 +15,6 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-@SQLDelete(sql = "UPDATE program_courses SET is_deleted = true WHERE id=?")
-@SQLRestriction("is_deleted = false")
 public class ProgramCourse extends BaseEntity {
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)

@@ -25,29 +25,40 @@ public class WorkflowTemplateService {
     private final WorkflowTemplateDraftRepository draftRepository;
 
     public List<WorkflowTemplateResponse> getAllLatestTemplates() {
-        // Simple logic for latest versions, group by code in memory for now or use custom query
-        return templateRepository.findAll().stream()
-                .collect(Collectors.groupingBy(WorkflowTemplate::getCode))
-                .values().stream()
-                .map(list -> list.stream().max((a, b) -> a.getVersion().compareTo(b.getVersion())).get())
+        return templateRepository.findLatestTemplates().stream()
                 .map(this::mapToResponse)
                 .collect(Collectors.toList());
     }
 
     public WorkflowTemplateResponse getTemplateById(UUID id) {
-        WorkflowTemplate template = templateRepository.findById(id)
+        WorkflowTemplate template = templateRepository.findByIdIncludingDeleted(id)
                 .orElseThrow(() -> new RuntimeException("Template not found"));
         WorkflowTemplateResponse response = mapToResponse(template);
         response.setHasDraft(draftRepository.findByTemplateId(id).isPresent());
         return response;
     }
 
+    public List<WorkflowTemplateResponse> getHistoryByTemplateId(UUID id) {
+        WorkflowTemplate template = templateRepository.findByIdIncludingDeleted(id)
+                .orElseThrow(() -> new RuntimeException("Template not found"));
+        return templateRepository.findAllVersionsByCode(template.getCode()).stream()
+                .map(this::mapToResponse)
+                .collect(Collectors.toList());
+    }
+
     @Transactional
     public WorkflowTemplateResponse saveOfficialTemplate(WorkflowTemplateRequest request) {
-        Optional<WorkflowTemplate> latest = templateRepository.findFirstByCodeOrderByVersionDesc(request.getCode());
-        
-        int nextVersion = latest.map(v -> v.getVersion() + 1).orElse(1);
-        
+        // 1. Calculate next version (including deleted versions to maintain history)
+        int nextVersion = templateRepository.getMaxVersionIncludingDeleted(request.getCode()) + 1;
+
+        // 2. Mark all old versions as inactive (but NOT deleted, so they can still be referenced by history)
+        List<WorkflowTemplate> oldVersions = templateRepository.findByCodeOrderByVersionDesc(request.getCode());
+        oldVersions.forEach(t -> {
+            t.setIsActive(false);
+            templateRepository.save(t);
+        });
+
+        // 3. Create new version
         WorkflowTemplate newTemplate = WorkflowTemplate.builder()
                 .code(request.getCode())
                 .name(request.getName())
@@ -57,9 +68,6 @@ public class WorkflowTemplateService {
                 .version(nextVersion)
                 .isActive(true)
                 .build();
-        
-        // If there were previous versions, we might want to deactivate them
-        // For simplicity, we just save the new one as active
         
         WorkflowTemplate saved = templateRepository.save(newTemplate);
         
@@ -113,7 +121,7 @@ public class WorkflowTemplateService {
 
     @Transactional
     public WorkflowTemplateResponse updateStatus(UUID id, WorkflowStatus status) {
-        WorkflowTemplate template = templateRepository.findById(id)
+        WorkflowTemplate template = templateRepository.findActiveById(id)
                 .orElseThrow(() -> new RuntimeException("Template not found"));
         
         template.setStatus(status);
