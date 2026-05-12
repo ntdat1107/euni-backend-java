@@ -35,3 +35,21 @@ logging:
     com.euni.backend: DEBUG
     org.springframework.web: INFO
     org.hibernate.SQL: DEBUG
+
+app:
+  logging:
+    excluded-urls:
+      - /api/v1/health
+      - /swagger-ui
+      - /v3/api-docs
+      - /favicon.ico
+    masked-fields:
+      - password
+      - token
+      - accessToken
+      - refreshToken
+      - secret
+      - base64
+      - image
+      - file
+    max-field-length: 500

@@ -1,6 +1,8 @@
 package com.euni.backend.config;
 
 import com.euni.backend.security.JwtAuthenticationFilter;
+import com.euni.backend.security.LoggingFilter;
+
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -23,6 +25,8 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
+    private final LoggingFilter loggingFilter;
+
 
     @Bean
     public PasswordEncoder passwordEncoder() {
@@ -57,6 +61,7 @@ public class SecurityConfig {
                 );
 
         http.addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
+        http.addFilterAfter(loggingFilter, JwtAuthenticationFilter.class);
 
         return http.build();
     }
