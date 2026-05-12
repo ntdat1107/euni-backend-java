@@ -31,6 +31,11 @@ public class WorkflowTemplateController extends BaseController {
         return ok(templateService.getTemplateById(id));
     }
 
+    @GetMapping("/{id}/history")
+    public ResponseEntity<ApiResponse<List<WorkflowTemplateResponse>>> getHistory(@PathVariable UUID id) {
+        return ok(templateService.getHistoryByTemplateId(id));
+    }
+
     @PostMapping("/save-official")
     public ResponseEntity<ApiResponse<WorkflowTemplateResponse>> saveOfficial(@RequestBody WorkflowTemplateRequest request) {
         return ok(templateService.saveOfficialTemplate(request));

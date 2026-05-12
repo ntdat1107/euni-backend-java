@@ -19,7 +19,7 @@ public class CourseService {
 
     @Transactional(readOnly = true)
     public List<CourseDto> getAllCourses() {
-        return courseRepository.findAll().stream()
+        return courseRepository.findAllActive().stream()
                 .map(this::toDto)
                 .collect(Collectors.toList());
     }
@@ -42,7 +42,7 @@ public class CourseService {
 
     @Transactional
     public CourseDto updateCourse(UUID id, CourseDto dto) {
-        Course course = courseRepository.findById(id)
+        Course course = courseRepository.findActiveById(id)
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy học phần"));
         
         if (!course.getCode().equals(dto.getCode()) && courseRepository.existsByCode(dto.getCode())) {
@@ -59,10 +59,10 @@ public class CourseService {
 
     @Transactional
     public void deleteCourse(UUID id) {
-        if (!courseRepository.existsById(id)) {
-            throw new RuntimeException("Không tìm thấy học phần");
-        }
-        courseRepository.deleteById(id);
+        Course course = courseRepository.findActiveById(id)
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy học phần"));
+        course.setDeleted(true);
+        courseRepository.save(course);
     }
 
     private CourseDto toDto(Course course) {

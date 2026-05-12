@@ -25,7 +25,7 @@ public class RoleService {
 
     @Transactional(readOnly = true)
     public List<RoleDto> getAllRoles() {
-        return roleRepository.findAll().stream()
+        return roleRepository.findAllActive().stream()
                 .map(roleMapper::toDto)
                 .collect(Collectors.toList());
     }
@@ -38,12 +38,15 @@ public class RoleService {
 
     @Transactional
     public void deleteRole(UUID id) {
-        roleRepository.deleteById(id);
+        Role role = roleRepository.findActiveById(id)
+                .orElseThrow(() -> new RuntimeException("Role not found"));
+        role.setDeleted(true);
+        roleRepository.save(role);
     }
 
     @Transactional
     public RoleDto updateRolePermissions(UUID roleId, List<UUID> permissionIds) {
-        Role role = roleRepository.findById(roleId)
+        Role role = roleRepository.findActiveById(roleId)
                 .orElseThrow(() -> new RuntimeException("Role not found"));
         
         List<Permission> permissions = permissionRepository.findAllById(permissionIds);

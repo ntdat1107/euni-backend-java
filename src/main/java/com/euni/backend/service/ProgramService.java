@@ -31,7 +31,7 @@ public class ProgramService {
 
     @Transactional(readOnly = true)
     public List<ProgramDto> getAllPrograms() {
-        return programRepository.findAll().stream()
+        return programRepository.findAllActive().stream()
                 .map(this::toDto)
                 .collect(Collectors.toList());
     }
@@ -42,7 +42,7 @@ public class ProgramService {
             throw new RuntimeException("Mã chương trình đã tồn tại");
         }
         
-        Major major = majorRepository.findById(dto.getMajorId())
+        Major major = majorRepository.findActiveById(dto.getMajorId())
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy ngành học"));
 
         Program program = Program.builder()
@@ -61,14 +61,14 @@ public class ProgramService {
 
     @Transactional
     public ProgramDto updateProgram(UUID id, ProgramDto dto) {
-        Program program = programRepository.findById(id)
+        Program program = programRepository.findActiveById(id)
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy chương trình đào tạo"));
         
         if (!program.getCode().equals(dto.getCode()) && programRepository.existsByCode(dto.getCode())) {
             throw new RuntimeException("Mã chương trình đã tồn tại");
         }
 
-        Major major = majorRepository.findById(dto.getMajorId())
+        Major major = majorRepository.findActiveById(dto.getMajorId())
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy ngành học"));
 
         program.setName(dto.getName());
@@ -82,7 +82,7 @@ public class ProgramService {
 
     @Transactional
     public void assignCourses(UUID programId, List<UUID> courseIds) {
-        Program program = programRepository.findById(programId)
+        Program program = programRepository.findActiveById(programId)
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy chương trình đào tạo"));
 
         java.util.Set<UUID> uniqueCourseIds = new java.util.HashSet<>(courseIds);
@@ -113,7 +113,7 @@ public class ProgramService {
                 
                 saveProgramCourseHistory(pc, wasDeleted ? "RESTORED" : "UPDATED");
             } else {
-                Course course = courseRepository.findById(courseId)
+                Course course = courseRepository.findActiveById(courseId)
                         .orElseThrow(() -> new RuntimeException("Không tìm thấy môn học: " + courseId));
                 
                 ProgramCourse pc = ProgramCourse.builder()
@@ -151,10 +151,10 @@ public class ProgramService {
 
     @Transactional
     public void deleteProgram(UUID id) {
-        if (!programRepository.existsById(id)) {
-            throw new RuntimeException("Không tìm thấy chương trình đào tạo");
-        }
-        programRepository.deleteById(id);
+        Program program = programRepository.findActiveById(id)
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy chương trình đào tạo"));
+        program.setDeleted(true);
+        programRepository.save(program);
     }
 
     private ProgramDto toDto(Program program) {

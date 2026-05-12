@@ -30,14 +30,14 @@ public class UserService {
 
     @Transactional(readOnly = true)
     public List<UserDto> getAllUsers() {
-        return userRepository.findAll().stream()
+        return userRepository.findAllActive().stream()
                 .map(userMapper::toDto)
                 .collect(Collectors.toList());
     }
 
     @Transactional(readOnly = true)
     public UserDto getUserById(UUID id) {
-        User user = userRepository.findById(id)
+        User user = userRepository.findActiveById(id)
                 .orElseThrow(() -> new RuntimeException("User not found"));
         return userMapper.toDto(user);
     }
@@ -51,12 +51,15 @@ public class UserService {
 
     @Transactional
     public void deleteUser(UUID id) {
-        userRepository.deleteById(id);
+        User user = userRepository.findActiveById(id)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+        user.setDeleted(true);
+        userRepository.save(user);
     }
 
     @Transactional
     public void updateUserStatus(UUID id, String status) {
-        User user = userRepository.findById(id)
+        User user = userRepository.findActiveById(id)
                 .orElseThrow(() -> new RuntimeException("User not found"));
         user.setStatus(status);
         userRepository.save(user);
@@ -93,7 +96,7 @@ public class UserService {
 
     @Transactional
     public UserDto updateUser(UUID id, UserDto userDto) {
-        User user = userRepository.findById(id)
+        User user = userRepository.findActiveById(id)
                 .orElseThrow(() -> new RuntimeException("User not found"));
         
         user.setFullName(userDto.getFullName());
@@ -128,7 +131,7 @@ public class UserService {
 
     @Transactional
     public java.util.Map<String, String> resetPassword(UUID id) {
-        User user = userRepository.findById(id)
+        User user = userRepository.findActiveById(id)
                 .orElseThrow(() -> new RuntimeException("User not found"));
         
         String tempPassword = "Temp" + java.util.UUID.randomUUID().toString().substring(0, 8);

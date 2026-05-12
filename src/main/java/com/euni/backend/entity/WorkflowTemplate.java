@@ -15,8 +15,6 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-@SQLDelete(sql = "UPDATE workflow_templates SET is_deleted = true WHERE id=?")
-@SQLRestriction("is_deleted = false")
 public class WorkflowTemplate extends BaseEntity {
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
