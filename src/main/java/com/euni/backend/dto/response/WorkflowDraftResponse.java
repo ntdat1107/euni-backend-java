@@ -16,6 +16,6 @@ public class WorkflowDraftResponse {
     private String name;
     private String description;
     private WorkflowStatus status;
-    private String xmlContent;
+    private String jsonContent;
     private ZonedDateTime lastSavedAt;
 }

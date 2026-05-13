@@ -43,4 +43,9 @@ public class SurveyCampaignController extends BaseController {
         campaignService.deleteCampaign(id);
         return ok(null);
     }
+
+    @GetMapping("/check-code")
+    public ResponseEntity<ApiResponse<Boolean>> checkCode(@RequestParam String code) {
+        return ok(campaignService.existsByCode(code));
+    }
 }

@@ -22,6 +22,7 @@ public class SurveyCampaignResponse {
     private String name;
     private String description;
     private UUID programId;
+    private String programCode;
     private String programName;
     private UUID workflowTemplateId;
     private String workflowTemplateName;
