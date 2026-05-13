@@ -15,7 +15,7 @@ public class WorkflowTemplateResponse {
     private String name;
     private String description;
     private WorkflowStatus status;
-    private String xmlContent;
+    private String jsonContent;
     private Integer version;
     private Boolean isActive;
     private ZonedDateTime createdAt;

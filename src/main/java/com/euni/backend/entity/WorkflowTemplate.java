@@ -29,8 +29,8 @@ public class WorkflowTemplate extends BaseEntity {
     @Column(columnDefinition = "TEXT")
     private String description;
 
-    @Column(name = "xml_content", nullable = false, columnDefinition = "TEXT")
-    private String xmlContent;
+    @Column(name = "json_content", nullable = false, columnDefinition = "TEXT")
+    private String jsonContent;
 
     @Column(nullable = false)
     @Builder.Default

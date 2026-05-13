@@ -39,8 +39,8 @@ public class WorkflowTemplateDraft extends BaseEntity {
     @Builder.Default
     private WorkflowStatus status = WorkflowStatus.ACTIVE;
 
-    @Column(name = "xml_content", nullable = false, columnDefinition = "TEXT")
-    private String xmlContent;
+    @Column(name = "json_content", nullable = false, columnDefinition = "TEXT")
+    private String jsonContent;
 
     @UpdateTimestamp
     @Column(name = "last_saved_at")

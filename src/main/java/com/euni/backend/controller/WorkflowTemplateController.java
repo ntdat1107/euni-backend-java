@@ -26,6 +26,13 @@ public class WorkflowTemplateController extends BaseController {
         return ok(templateService.getAllLatestTemplates());
     }
 
+    @GetMapping("/check-code")
+    public ResponseEntity<ApiResponse<Boolean>> checkCode(
+            @RequestParam String code,
+            @RequestParam(required = false) UUID currentId) {
+        return ok(templateService.checkCodeExists(code, currentId));
+    }
+
     @GetMapping("/{id}")
     public ResponseEntity<ApiResponse<WorkflowTemplateResponse>> getById(@PathVariable UUID id) {
         return ok(templateService.getTemplateById(id));

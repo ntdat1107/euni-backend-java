@@ -101,6 +101,11 @@ public class SurveyCampaignService {
         campaignRepository.save(campaign);
     }
 
+    @Transactional(readOnly = true)
+    public boolean existsByCode(String code) {
+        return campaignRepository.existsByCode(code);
+    }
+
     private SurveyCampaignStep mapStepRequestToEntity(SurveyCampaignRequest.SurveyCampaignStepRequest stepReq, SurveyCampaign campaign) {
         String documentsJson = "";
         String configJson = "";
@@ -128,6 +133,7 @@ public class SurveyCampaignService {
                 .name(campaign.getName())
                 .description(campaign.getDescription())
                 .programId(campaign.getProgram().getId())
+                .programCode(campaign.getProgram().getCode())
                 .programName(campaign.getProgram().getName())
                 .workflowTemplateId(campaign.getWorkflowTemplate().getId())
                 .workflowTemplateName(campaign.getWorkflowTemplate().getName())

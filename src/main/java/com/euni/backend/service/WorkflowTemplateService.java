@@ -64,7 +64,7 @@ public class WorkflowTemplateService {
                 .name(request.getName())
                 .description(request.getDescription())
                 .status(request.getStatus() != null ? request.getStatus() : WorkflowStatus.ACTIVE)
-                .xmlContent(request.getXmlContent())
+                .jsonContent(request.getJsonContent())
                 .version(nextVersion)
                 .isActive(true)
                 .build();
@@ -85,7 +85,7 @@ public class WorkflowTemplateService {
         draft.setName(request.getName());
         draft.setDescription(request.getDescription());
         draft.setStatus(request.getStatus());
-        draft.setXmlContent(request.getXmlContent());
+        draft.setJsonContent(request.getJsonContent());
         
         // Link to template if code exists
         templateRepository.findFirstByCodeOrderByVersionDesc(request.getCode())
@@ -100,7 +100,7 @@ public class WorkflowTemplateService {
                 .name(saved.getName())
                 .description(saved.getDescription())
                 .status(saved.getStatus())
-                .xmlContent(saved.getXmlContent())
+                .jsonContent(saved.getJsonContent())
                 .lastSavedAt(saved.getLastSavedAt())
                 .build();
     }
@@ -114,9 +114,15 @@ public class WorkflowTemplateService {
                         .name(d.getName())
                         .description(d.getDescription())
                         .status(d.getStatus())
-                        .xmlContent(d.getXmlContent())
+                        .jsonContent(d.getJsonContent())
                         .lastSavedAt(d.getLastSavedAt())
                         .build());
+    }
+
+    public boolean checkCodeExists(String code, UUID currentId) {
+        return templateRepository.findFirstByCodeOrderByVersionDesc(code)
+                .map(t -> !t.getId().equals(currentId))
+                .orElse(false);
     }
 
     @Transactional
@@ -138,7 +144,7 @@ public class WorkflowTemplateService {
                 .name(template.getName())
                 .description(template.getDescription())
                 .status(template.getStatus())
-                .xmlContent(template.getXmlContent())
+                .jsonContent(template.getJsonContent())
                 .version(template.getVersion())
                 .isActive(template.getIsActive())
                 .createdAt(template.getCreatedAt())

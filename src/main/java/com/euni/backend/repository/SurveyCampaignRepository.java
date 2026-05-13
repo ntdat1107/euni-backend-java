@@ -20,4 +20,7 @@ public interface SurveyCampaignRepository extends JpaRepository<SurveyCampaign, 
 
     @Query("SELECT s FROM SurveyCampaign s WHERE s.code = :code AND s.deleted = false")
     Optional<SurveyCampaign> findByCode(@Param("code") String code);
+
+    @Query("SELECT COUNT(s) > 0 FROM SurveyCampaign s WHERE s.code = :code AND s.deleted = false")
+    boolean existsByCode(@Param("code") String code);
 }
