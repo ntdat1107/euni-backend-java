@@ -35,8 +35,8 @@ public class SurveyCampaignStep extends BaseEntity {
     @Column(name = "deadline")
     private LocalDateTime deadline;
 
-    @Column(columnDefinition = "TEXT")
-    private String documents; // Stored as JSON string
+    @Column(name = "required_documents", columnDefinition = "TEXT")
+    private String requiredDocuments; // JSON string array
 
     @Column(columnDefinition = "TEXT")
     private String configuration; // Dynamic configuration (JSON)

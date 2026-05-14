@@ -2,8 +2,8 @@
 -- Author: Antigravity (AI Engineering Assistant)
 -- Purpose: Support Survey Campaign management feature with dynamic workflow steps.
 
-DROP TABLE IF EXISTS survey_campaign_steps;
-DROP TABLE IF EXISTS survey_campaigns;
+DROP TABLE IF EXISTS survey_campaign_steps CASCADE;
+DROP TABLE IF EXISTS survey_campaigns CASCADE;
 
 CREATE TABLE survey_campaigns (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -28,7 +28,7 @@ CREATE TABLE survey_campaign_steps (
     step_index INT NOT NULL,
     step_name VARCHAR(255) NOT NULL,
     deadline TIMESTAMP,
-    documents TEXT, -- JSON array of document requirements or descriptions
+    required_documents TEXT, -- JSON array of document requirements or descriptions
     configuration TEXT, -- Full step configuration from workflow template (JSON)
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,

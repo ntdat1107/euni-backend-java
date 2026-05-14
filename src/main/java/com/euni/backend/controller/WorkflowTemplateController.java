@@ -60,6 +60,13 @@ public class WorkflowTemplateController extends BaseController {
                 .orElse(ok(null));
     }
 
+    @GetMapping("/latest/{code}")
+    public ResponseEntity<ApiResponse<WorkflowTemplateResponse>> getLatestByCode(@PathVariable String code) {
+        return templateService.getLatestTemplateByCode(code)
+                .map(this::ok)
+                .orElse(ok(null));
+    }
+
     @PatchMapping("/{id}/status")
     public ResponseEntity<ApiResponse<WorkflowTemplateResponse>> updateStatus(
             @PathVariable UUID id,

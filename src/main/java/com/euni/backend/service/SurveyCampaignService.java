@@ -55,7 +55,7 @@ public class SurveyCampaignService {
                 .workflowTemplate(template)
                 .startDate(request.getStartDate())
                 .endDate(request.getEndDate())
-                .status(request.getStatus() != null ? request.getStatus() : SurveyCampaignStatus.DRAFT)
+                .status(request.getStatus() != null ? request.getStatus() : SurveyCampaignStatus.ACTIVE)
                 .build();
 
         if (request.getSteps() != null) {
@@ -107,11 +107,15 @@ public class SurveyCampaignService {
     }
 
     private SurveyCampaignStep mapStepRequestToEntity(SurveyCampaignRequest.SurveyCampaignStepRequest stepReq, SurveyCampaign campaign) {
-        String documentsJson = "";
-        String configJson = "";
+        String documentsJson = "[]";
+        String configJson = "{}";
         try {
-            documentsJson = objectMapper.writeValueAsString(stepReq.getRequiredDocuments());
-            configJson = objectMapper.writeValueAsString(stepReq.getConfiguration());
+            if (stepReq.getRequiredDocuments() != null) {
+                documentsJson = objectMapper.writeValueAsString(stepReq.getRequiredDocuments());
+            }
+            if (stepReq.getConfiguration() != null) {
+                configJson = objectMapper.writeValueAsString(stepReq.getConfiguration());
+            }
         } catch (JsonProcessingException e) {
             log.error("Error serializing step data for: {}", stepReq.getStepName(), e);
         }
@@ -121,7 +125,7 @@ public class SurveyCampaignService {
                 .stepIndex(stepReq.getStepIndex())
                 .stepName(stepReq.getStepName())
                 .deadline(stepReq.getDeadline())
-                .documents(documentsJson)
+                .requiredDocuments(documentsJson)
                 .configuration(configJson)
                 .build();
     }
@@ -152,11 +156,17 @@ public class SurveyCampaignService {
         List<String> docs = new ArrayList<>();
         Map<String, Object> config = new HashMap<>();
         try {
-            if (step.getDocuments() != null && !step.getDocuments().isEmpty()) {
-                docs = Arrays.asList(objectMapper.readValue(step.getDocuments(), String[].class));
+            if (step.getRequiredDocuments() != null && !step.getRequiredDocuments().isEmpty() && !step.getRequiredDocuments().equals("null")) {
+                String[] docsArray = objectMapper.readValue(step.getRequiredDocuments(), String[].class);
+                if (docsArray != null) {
+                    docs = Arrays.asList(docsArray);
+                }
             }
-            if (step.getConfiguration() != null && !step.getConfiguration().isEmpty()) {
-                config = objectMapper.readValue(step.getConfiguration(), Map.class);
+            if (step.getConfiguration() != null && !step.getConfiguration().isEmpty() && !step.getConfiguration().equals("null")) {
+                Map<String, Object> configMap = objectMapper.readValue(step.getConfiguration(), Map.class);
+                if (configMap != null) {
+                    config = configMap;
+                }
             }
         } catch (JsonProcessingException e) {
             log.error("Error deserializing step data for: {}", step.getStepName(), e);

@@ -55,7 +55,8 @@ CREATE TABLE users (
     phone VARCHAR(20),
     status VARCHAR(20) DEFAULT 'Inactive',
     created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+    updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    token_version BIGINT NOT NULL DEFAULT 0
 );
 
 -- 5. Role-Permissions Mapping

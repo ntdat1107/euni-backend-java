@@ -12,4 +12,5 @@ public class WorkflowTemplateRequest {
     private String description;
     private WorkflowStatus status;
     private String jsonContent;
+    private UUID draftId;
 }
