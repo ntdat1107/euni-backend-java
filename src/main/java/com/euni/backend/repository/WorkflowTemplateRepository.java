@@ -15,11 +15,9 @@ public interface WorkflowTemplateRepository extends JpaRepository<WorkflowTempla
     @Query("SELECT t FROM WorkflowTemplate t WHERE t.code = :code AND t.deleted = false ORDER BY t.version DESC")
     List<WorkflowTemplate> findByCodeOrderByVersionDesc(@Param("code") String code);
 
-    @Query("SELECT t FROM WorkflowTemplate t WHERE t.code = :code AND t.deleted = false ORDER BY t.version DESC")
-    Optional<WorkflowTemplate> findFirstByCodeOrderByVersionDesc(@Param("code") String code);
+    Optional<WorkflowTemplate> findFirstByCodeAndDeletedFalseOrderByVersionDesc(String code);
 
-    @Query("SELECT t FROM WorkflowTemplate t WHERE t.code = :code AND t.deleted = false ORDER BY t.version DESC LIMIT 1")
-    Optional<WorkflowTemplate> findTopByCodeOrderByVersionDesc(@Param("code") String code);
+    Optional<WorkflowTemplate> findTopByCodeAndDeletedFalseOrderByVersionDesc(String code);
 
     @Query("SELECT t FROM WorkflowTemplate t WHERE t.id = :id AND t.deleted = false")
     Optional<WorkflowTemplate> findActiveById(@Param("id") UUID id);

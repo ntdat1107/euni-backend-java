@@ -2,12 +2,12 @@
 -- Author: Antigravity (AI Engineering Assistant)
 -- Purpose: Schema for Majors, Programs, and Courses.
 
-DROP TABLE IF EXISTS program_course_history;
-DROP TABLE IF EXISTS program_courses;
-DROP TABLE IF EXISTS courses;
-DROP TABLE IF EXISTS program_history;
-DROP TABLE IF EXISTS programs;
-DROP TABLE IF EXISTS majors;
+DROP TABLE IF EXISTS program_course_history CASCADE;
+DROP TABLE IF EXISTS program_courses CASCADE;
+DROP TABLE IF EXISTS courses CASCADE;
+DROP TABLE IF EXISTS program_history CASCADE;
+DROP TABLE IF EXISTS programs CASCADE;
+DROP TABLE IF EXISTS majors CASCADE;
 
 -- 1. Majors Table (Ngành học)
 CREATE TABLE majors (

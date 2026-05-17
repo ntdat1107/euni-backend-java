@@ -1,174 +1,177 @@
 package com.euni.backend.service;
 
-import com.euni.backend.dto.request.SurveyCampaignRequest;
-import com.euni.backend.dto.response.SurveyCampaignResponse;
+import com.euni.backend.dto.SurveyCampaignDto;
+import com.euni.backend.dto.SurveyCampaignStepDto;
 import com.euni.backend.entity.*;
 import com.euni.backend.entity.enums.SurveyCampaignStatus;
 import com.euni.backend.exception.ResourceNotFoundException;
 import com.euni.backend.repository.*;
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.*;
+import java.util.List;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
 @Slf4j
 public class SurveyCampaignService {
+
     private final SurveyCampaignRepository campaignRepository;
+    private final SurveyCampaignStepRepository stepRepository;
     private final ProgramRepository programRepository;
-    private final WorkflowTemplateRepository workflowTemplateRepository;
-    private final ObjectMapper objectMapper;
+    private final ProgramCourseRepository programCourseRepository;
+    private final CourseRepository courseRepository;
 
     @Transactional(readOnly = true)
-    public List<SurveyCampaignResponse> getAllCampaigns() {
-        return campaignRepository.findAllActive().stream()
-                .map(this::mapToResponse)
+    public List<SurveyCampaignDto> getAll() {
+        return campaignRepository.findAll().stream()
+                .map(this::convertToDto)
                 .collect(Collectors.toList());
     }
 
     @Transactional(readOnly = true)
-    public SurveyCampaignResponse getCampaignById(UUID id) {
-        SurveyCampaign campaign = campaignRepository.findActiveById(id)
+    public SurveyCampaignDto getById(UUID id) {
+        SurveyCampaign campaign = campaignRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("SurveyCampaign", "id", id));
-        return mapToResponse(campaign);
+        return convertToDto(campaign);
     }
 
     @Transactional
-    public SurveyCampaignResponse createCampaign(SurveyCampaignRequest request) {
-        Program program = programRepository.findActiveById(request.getProgramId())
-                .orElseThrow(() -> new ResourceNotFoundException("Program", "id", request.getProgramId()));
-        
-        WorkflowTemplate template = workflowTemplateRepository.findActiveById(request.getWorkflowTemplateId())
-                .orElseThrow(() -> new ResourceNotFoundException("WorkflowTemplate", "id", request.getWorkflowTemplateId()));
+    public SurveyCampaignStepDto saveStepData(UUID campaignId, UUID stepId, String resultData) {
+        SurveyCampaignStep step = stepRepository.findById(stepId)
+                .orElseThrow(() -> new ResourceNotFoundException("SurveyCampaignStep", "id", stepId));
 
-        SurveyCampaign campaign = SurveyCampaign.builder()
-                .code(request.getCode() != null ? request.getCode() : "CAM-" + System.currentTimeMillis())
-                .name(request.getName())
-                .description(request.getDescription())
-                .program(program)
-                .workflowTemplate(template)
-                .startDate(request.getStartDate())
-                .endDate(request.getEndDate())
-                .status(request.getStatus() != null ? request.getStatus() : SurveyCampaignStatus.DRAFT)
-                .build();
-
-        if (request.getSteps() != null) {
-            List<SurveyCampaignStep> steps = request.getSteps().stream()
-                    .map(stepReq -> mapStepRequestToEntity(stepReq, campaign))
-                    .collect(Collectors.toList());
-            campaign.setSteps(steps);
+        if (!step.getCampaign().getId().equals(campaignId)) {
+            throw new IllegalArgumentException("Step does not belong to the specified campaign");
         }
 
-        return mapToResponse(campaignRepository.save(campaign));
+        step.setResultData(resultData);
+        step.setStatus("COMPLETED");
+        SurveyCampaignStep saved = stepRepository.save(step);
+
+        return convertToStepDto(saved);
     }
 
     @Transactional
-    public SurveyCampaignResponse updateCampaign(UUID id, SurveyCampaignRequest request) {
-        SurveyCampaign campaign = campaignRepository.findActiveById(id)
+    public void approveCampaign(UUID id) {
+        SurveyCampaign campaign = campaignRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("SurveyCampaign", "id", id));
 
-        campaign.setName(request.getName());
-        campaign.setDescription(request.getDescription());
-        campaign.setStartDate(request.getStartDate());
-        campaign.setEndDate(request.getEndDate());
-        if (request.getStatus() != null) {
-            campaign.setStatus(request.getStatus());
-        }
-
-        // Update steps: For simplicity, replace all steps
-        if (request.getSteps() != null) {
-            campaign.getSteps().clear();
-            List<SurveyCampaignStep> newSteps = request.getSteps().stream()
-                    .map(stepReq -> mapStepRequestToEntity(stepReq, campaign))
-                    .collect(Collectors.toList());
-            campaign.getSteps().addAll(newSteps);
-        }
-
-        return mapToResponse(campaignRepository.save(campaign));
-    }
-
-    @Transactional
-    public void deleteCampaign(UUID id) {
-        SurveyCampaign campaign = campaignRepository.findActiveById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("SurveyCampaign", "id", id));
-        campaign.setDeleted(true);
+        campaign.setStatus(SurveyCampaignStatus.APPROVED);
         campaignRepository.save(campaign);
+
+        // Trigger Sync-Back
+        syncBackData(campaign);
     }
 
-    @Transactional(readOnly = true)
-    public boolean existsByCode(String code) {
-        return campaignRepository.existsByCode(code);
-    }
+    private void syncBackData(SurveyCampaign campaign) {
+        log.info("Starting sync-back for campaign: {}", campaign.getName());
+        List<SurveyCampaignStep> steps = stepRepository.findByCampaignIdOrderByStepIndexAsc(campaign.getId());
 
-    private SurveyCampaignStep mapStepRequestToEntity(SurveyCampaignRequest.SurveyCampaignStepRequest stepReq, SurveyCampaign campaign) {
-        String documentsJson = "";
-        String configJson = "";
-        try {
-            documentsJson = objectMapper.writeValueAsString(stepReq.getRequiredDocuments());
-            configJson = objectMapper.writeValueAsString(stepReq.getConfiguration());
-        } catch (JsonProcessingException e) {
-            log.error("Error serializing step data for: {}", stepReq.getStepName(), e);
+        for (SurveyCampaignStep step : steps) {
+            String screenCode = extractScreenCode(step.getConfiguration());
+            if (screenCode == null) continue;
+
+            switch (screenCode) {
+                case "S2_PLO":
+                    handleS2Sync(campaign.getProgram(), step.getResultData());
+                    break;
+                case "S5_CLO":
+                    handleS5Sync(campaign.getProgram(), step.getResultData());
+                    break;
+                default:
+                    log.debug("No sync logic for screen: {}", screenCode);
+            }
         }
+    }
 
-        return SurveyCampaignStep.builder()
-                .campaign(campaign)
-                .stepIndex(stepReq.getStepIndex())
-                .stepName(stepReq.getStepName())
-                .deadline(stepReq.getDeadline())
-                .documents(documentsJson)
-                .configuration(configJson)
+    private void handleS2Sync(Program program, String resultData) {
+        if (resultData == null || resultData.isEmpty()) return;
+        
+        program.setData(resultData);
+        programRepository.save(program);
+        log.info("Synced S2_PLO data for program: {}", program.getName());
+    }
+
+    private void handleS5Sync(Program program, String resultData) {
+        if (resultData == null || resultData.isEmpty()) return;
+
+        try {
+            String courseCode = extractCourseCode(resultData); 
+            if (courseCode != null) {
+                Course course = courseRepository.findByCode(courseCode)
+                        .orElseThrow(() -> new ResourceNotFoundException("Course", "code", courseCode));
+                
+                ProgramCourse programCourse = programCourseRepository.findByProgramIdAndCourseId(program.getId(), course.getId())
+                        .orElseThrow(() -> new ResourceNotFoundException("ProgramCourse", "ids", "program:" + program.getId() + ", course:" + course.getId()));
+
+                programCourse.setData(resultData);
+                programCourseRepository.save(programCourse);
+                log.info("Synced S5_CLO data for course: {} in program: {}", courseCode, program.getName());
+            }
+        } catch (Exception e) {
+            log.error("Error syncing S5 data: {}", e.getMessage());
+        }
+    }
+
+    private final ObjectMapper objectMapper;
+
+    private String extractScreenCode(String config) {
+        try {
+            if (config == null || config.isEmpty()) return null;
+            return objectMapper.readTree(config).get("screenCode").asText();
+        } catch (Exception e) {
+            log.error("Error extracting screenCode: {}", e.getMessage());
+            return null;
+        }
+    }
+
+    private String extractCourseCode(String result) {
+        try {
+            if (result == null || result.isEmpty()) return null;
+            return objectMapper.readTree(result).get("courseCode").asText();
+        } catch (Exception e) {
+            log.error("Error extracting courseCode: {}", e.getMessage());
+            return null;
+        }
+    }
+
+    private SurveyCampaignDto convertToDto(SurveyCampaign entity) {
+        return SurveyCampaignDto.builder()
+                .id(entity.getId())
+                .code(entity.getCode())
+                .name(entity.getName())
+                .description(entity.getDescription())
+                .programId(entity.getProgram().getId())
+                .programName(entity.getProgram().getName())
+                .workflowTemplateId(entity.getWorkflowTemplate().getId())
+                .workflowTemplateName(entity.getWorkflowTemplate().getName())
+                .startDate(entity.getStartDate())
+                .endDate(entity.getEndDate())
+                .status(entity.getStatus().name())
+                .createdAt(entity.getCreatedAt())
+                .updatedAt(entity.getUpdatedAt())
+                .createdBy(entity.getCreatedBy())
+                .updatedBy(entity.getUpdatedBy())
+                .steps(entity.getSteps().stream().map(this::convertToStepDto).collect(Collectors.toList()))
                 .build();
     }
 
-    private SurveyCampaignResponse mapToResponse(SurveyCampaign campaign) {
-        return SurveyCampaignResponse.builder()
-                .id(campaign.getId())
-                .code(campaign.getCode())
-                .name(campaign.getName())
-                .description(campaign.getDescription())
-                .programId(campaign.getProgram().getId())
-                .programCode(campaign.getProgram().getCode())
-                .programName(campaign.getProgram().getName())
-                .workflowTemplateId(campaign.getWorkflowTemplate().getId())
-                .workflowTemplateName(campaign.getWorkflowTemplate().getName())
-                .startDate(campaign.getStartDate())
-                .endDate(campaign.getEndDate())
-                .status(campaign.getStatus())
-                .createdAt(campaign.getCreatedAt())
-                .steps(campaign.getSteps().stream()
-                        .filter(step -> !step.isDeleted())
-                        .map(this::mapStepToResponse)
-                        .collect(Collectors.toList()))
-                .build();
-    }
-
-    private SurveyCampaignResponse.SurveyCampaignStepResponse mapStepToResponse(SurveyCampaignStep step) {
-        List<String> docs = new ArrayList<>();
-        Map<String, Object> config = new HashMap<>();
-        try {
-            if (step.getDocuments() != null && !step.getDocuments().isEmpty()) {
-                docs = Arrays.asList(objectMapper.readValue(step.getDocuments(), String[].class));
-            }
-            if (step.getConfiguration() != null && !step.getConfiguration().isEmpty()) {
-                config = objectMapper.readValue(step.getConfiguration(), Map.class);
-            }
-        } catch (JsonProcessingException e) {
-            log.error("Error deserializing step data for: {}", step.getStepName(), e);
-        }
-
-        return SurveyCampaignResponse.SurveyCampaignStepResponse.builder()
-                .id(step.getId())
-                .stepIndex(step.getStepIndex())
-                .stepName(step.getStepName())
-                .deadline(step.getDeadline())
-                .requiredDocuments(docs)
-                .configuration(config)
+    private SurveyCampaignStepDto convertToStepDto(SurveyCampaignStep entity) {
+        return SurveyCampaignStepDto.builder()
+                .id(entity.getId())
+                .stepIndex(entity.getStepIndex())
+                .stepName(entity.getStepName())
+                .deadline(entity.getDeadline())
+                .requiredDocuments(entity.getRequiredDocuments())
+                .configuration(entity.getConfiguration())
+                .status(entity.getStatus())
+                .resultData(entity.getResultData())
                 .build();
     }
 }

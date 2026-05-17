@@ -32,4 +32,7 @@ public class ProgramCourse extends BaseEntity {
 
     @Column(name = "is_required")
     private Boolean required = true;
+
+    @Column(name = "data", columnDefinition = "TEXT")
+    private String data; // Synced metadata (CLO JSON)
 }
