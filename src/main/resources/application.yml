@@ -48,11 +48,11 @@ logging:
 app:
   seeder:
     database:
-      enabled: false
+      enabled: true
     academic:
-      enabled: false
+      enabled: true
     workflow-step:
-      enabled: false
+      enabled: true
   logging:
     excluded-urls:
       - /api/v1/health
