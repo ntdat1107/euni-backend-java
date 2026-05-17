@@ -5,6 +5,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.time.ZonedDateTime;
 import java.util.List;
 import java.util.UUID;
 
@@ -19,4 +20,8 @@ public class WorkflowStepDefinitionResponse {
     private String stepName;
     private String type;
     private List<String> requiredDocuments;
+    private String createdBy;
+    private String updatedBy;
+    private ZonedDateTime createdAt;
+    private ZonedDateTime updatedAt;
 }

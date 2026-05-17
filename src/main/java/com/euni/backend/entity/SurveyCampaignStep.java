@@ -40,4 +40,11 @@ public class SurveyCampaignStep extends BaseEntity {
 
     @Column(columnDefinition = "TEXT")
     private String configuration; // Dynamic configuration (JSON)
+
+    @Column(length = 20, nullable = false)
+    @Builder.Default
+    private String status = "DRAFT";
+
+    @Column(name = "result_data", columnDefinition = "TEXT")
+    private String resultData; // Actual survey output (JSON)
 }

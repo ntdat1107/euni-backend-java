@@ -45,6 +45,9 @@ public class Program extends BaseEntity {
     @Column(name = "learning_outcomes", columnDefinition = "TEXT")
     private String learningOutcomes;
 
+    @Column(name = "data", columnDefinition = "TEXT")
+    private String data; // Synced metadata (PEO/PLO/PI JSON)
+
     @Column(name = "current_revision")
     private Integer currentRevision = 1;
 }

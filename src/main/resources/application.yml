@@ -46,6 +46,13 @@ logging:
 #    org.hibernate.SQL: DEBUG
 
 app:
+  seeder:
+    database:
+      enabled: false
+    academic:
+      enabled: false
+    workflow-step:
+      enabled: false
   logging:
     excluded-urls:
       - /api/v1/health

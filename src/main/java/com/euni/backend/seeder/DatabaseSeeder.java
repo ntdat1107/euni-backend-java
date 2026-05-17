@@ -11,6 +11,7 @@ import com.euni.backend.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.CommandLineRunner;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -26,6 +27,7 @@ import java.util.logging.Level;
 @RequiredArgsConstructor
 @Slf4j
 @Order(Ordered.HIGHEST_PRECEDENCE)
+@ConditionalOnProperty(name = "app.seeder.database.enabled", havingValue = "true")
 public class DatabaseSeeder implements CommandLineRunner {
 
     private final FacultyRepository facultyRepository;

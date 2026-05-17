@@ -12,6 +12,7 @@ import com.euni.backend.repository.ProgramRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.CommandLineRunner;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -22,6 +23,7 @@ import java.util.UUID;
 @RequiredArgsConstructor
 @Slf4j
 @Order(2) // Run after base data if any
+@ConditionalOnProperty(name = "app.seeder.academic.enabled", havingValue = "true")
 public class AcademicCoreSeeder implements CommandLineRunner {
 
     private final FacultyRepository facultyRepository;

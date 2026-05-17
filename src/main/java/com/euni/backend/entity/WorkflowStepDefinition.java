@@ -3,6 +3,9 @@ package com.euni.backend.entity;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.GenericGenerator;
+import org.springframework.data.annotation.CreatedBy;
+import org.springframework.data.annotation.LastModifiedBy;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 import java.util.UUID;
 
@@ -13,6 +16,7 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+@EntityListeners(AuditingEntityListener.class)
 public class WorkflowStepDefinition extends BaseEntity {
     @Id
     @GeneratedValue(generator = "UUID")
@@ -34,4 +38,12 @@ public class WorkflowStepDefinition extends BaseEntity {
 
     @Column(name = "required_documents", columnDefinition = "TEXT")
     private String requiredDocuments; // JSON array of strings
+
+    @CreatedBy
+    @Column(name = "created_by", updatable = false)
+    private String createdBy;
+
+    @LastModifiedBy
+    @Column(name = "updated_by")
+    private String updatedBy;
 }

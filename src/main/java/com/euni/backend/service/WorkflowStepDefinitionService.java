@@ -53,6 +53,10 @@ public class WorkflowStepDefinitionService {
                 .stepName(entity.getStepName())
                 .type(entity.getType())
                 .requiredDocuments(docs)
+                .createdBy(entity.getCreatedBy())
+                .updatedBy(entity.getUpdatedBy())
+                .createdAt(entity.getCreatedAt())
+                .updatedAt(entity.getUpdatedAt())
                 .build();
     }
 }

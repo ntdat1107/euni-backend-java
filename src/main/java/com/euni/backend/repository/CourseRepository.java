@@ -20,4 +20,6 @@ public interface CourseRepository extends JpaRepository<Course, UUID> {
 
     @Query("SELECT c FROM Course c WHERE c.id = :id AND c.deleted = false")
     Optional<Course> findActiveById(@Param("id") UUID id);
+
+    Optional<Course> findByCode(String code);
 }
