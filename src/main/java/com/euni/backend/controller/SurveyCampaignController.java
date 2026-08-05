@@ -1,5 +1,7 @@
 package com.euni.backend.controller;
 
+import com.euni.backend.dto.request.SurveyCampaignRequest;
+
 import com.euni.backend.dto.SurveyCampaignDto;
 import com.euni.backend.dto.SurveyCampaignStepDto;
 import com.euni.backend.dto.response.ApiResponse;
@@ -30,6 +32,33 @@ public class SurveyCampaignController extends BaseController {
         return ok(campaignService.getById(id));
     }
 
+    @PostMapping
+    public ResponseEntity<ApiResponse<SurveyCampaignDto>> create(@RequestBody SurveyCampaignRequest request) {
+        return ok("Tạo đợt khảo sát thành công", campaignService.create(request));
+    }
+
+    @PutMapping("/{id}")
+    public ResponseEntity<ApiResponse<SurveyCampaignDto>> update(@PathVariable UUID id, @RequestBody SurveyCampaignRequest request) {
+        return ok("Cập nhật đợt khảo sát thành công", campaignService.update(id, request));
+    }
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<ApiResponse<Void>> delete(@PathVariable UUID id) {
+        campaignService.delete(id);
+        return ok("Đã hủy đợt khảo sát thành công", null);
+    }
+
+    @PostMapping("/{id}/cancel")
+    public ResponseEntity<ApiResponse<SurveyCampaignDto>> cancel(@PathVariable UUID id) {
+        // TODO: RBAC Permission Check (PERM_SURVEY_CAMPAIGN_CANCEL)
+        return ok("Đã hủy đợt khảo sát thành công", campaignService.cancelCampaign(id));
+    }
+
+    @GetMapping("/check-code")
+    public ResponseEntity<ApiResponse<Boolean>> checkCode(@RequestParam String code) {
+        return ok(campaignService.checkCode(code));
+    }
+
     @PostMapping("/{id}/steps/{stepId}/save")
     public ResponseEntity<ApiResponse<SurveyCampaignStepDto>> saveStepData(
             @PathVariable UUID id,
@@ -45,3 +74,4 @@ public class SurveyCampaignController extends BaseController {
         return ok("Phê duyệt đợt khảo sát và đồng bộ dữ liệu thành công", null);
     }
 }
+

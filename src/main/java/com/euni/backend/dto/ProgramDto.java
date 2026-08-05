@@ -26,4 +26,6 @@ public class ProgramDto {
     private String learningOutcomes;
     private ZonedDateTime createdAt;
     private ZonedDateTime updatedAt;
+    private Boolean hasUncompletedCampaign;
 }
+

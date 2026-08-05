@@ -22,4 +22,7 @@ public interface ProgramRepository extends JpaRepository<Program, UUID> {
 
     @Query("SELECT p FROM Program p WHERE p.id = :id AND p.deleted = false")
     Optional<Program> findActiveById(@Param("id") UUID id);
+
+    @Query("SELECT p FROM Program p WHERE p.code = :code AND p.deleted = false")
+    Optional<Program> findByCode(@Param("code") String code);
 }

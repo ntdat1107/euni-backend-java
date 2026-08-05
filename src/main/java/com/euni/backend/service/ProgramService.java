@@ -7,6 +7,7 @@ import com.euni.backend.entity.enums.ProgramStatus;
 import com.euni.backend.entity.ProgramCourse;
 import com.euni.backend.entity.Course;
 import com.euni.backend.entity.history.ProgramHistory;
+import com.euni.backend.entity.enums.SurveyCampaignStatus;
 import com.euni.backend.repository.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -27,7 +28,16 @@ public class ProgramService {
     private final ProgramCourseRepository programCourseRepository;
     private final CourseRepository courseRepository;
     private final ProgramCourseHistoryRepository programCourseHistoryRepository;
+    private final SurveyCampaignRepository surveyCampaignRepository;
     private final jakarta.persistence.EntityManager entityManager;
+
+    private void checkActiveSurveyCampaign(UUID programId) {
+        if (surveyCampaignRepository.existsByProgramIdAndStatusNotIn(
+                programId, 
+                List.of(SurveyCampaignStatus.COMPLETED, SurveyCampaignStatus.APPROVED, SurveyCampaignStatus.CANCELLED))) {
+            throw new RuntimeException("Không thể chỉnh sửa hoặc gán môn học cho Chương trình đào tạo do đang có Đợt khảo sát chưa hoàn thành!");
+        }
+    }
 
     @Transactional(readOnly = true)
     public List<ProgramDto> getAllPrograms() {
@@ -61,6 +71,8 @@ public class ProgramService {
 
     @Transactional
     public ProgramDto updateProgram(UUID id, ProgramDto dto) {
+        checkActiveSurveyCampaign(id);
+
         Program program = programRepository.findActiveById(id)
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy chương trình đào tạo"));
         
@@ -82,6 +94,8 @@ public class ProgramService {
 
     @Transactional
     public void assignCourses(UUID programId, List<UUID> courseIds) {
+        checkActiveSurveyCampaign(programId);
+
         Program program = programRepository.findActiveById(programId)
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy chương trình đào tạo"));
 
@@ -151,6 +165,8 @@ public class ProgramService {
 
     @Transactional
     public void deleteProgram(UUID id) {
+        checkActiveSurveyCampaign(id);
+
         Program program = programRepository.findActiveById(id)
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy chương trình đào tạo"));
         program.setDeleted(true);
@@ -158,6 +174,10 @@ public class ProgramService {
     }
 
     private ProgramDto toDto(Program program) {
+        boolean hasUncompleted = surveyCampaignRepository.existsByProgramIdAndStatusNotIn(
+                program.getId(), 
+                List.of(SurveyCampaignStatus.COMPLETED, SurveyCampaignStatus.APPROVED, SurveyCampaignStatus.CANCELLED));
+
         return ProgramDto.builder()
                 .id(program.getId())
                 .name(program.getName())
@@ -171,6 +191,8 @@ public class ProgramService {
                 .learningOutcomes(program.getLearningOutcomes())
                 .createdAt(program.getCreatedAt())
                 .updatedAt(program.getUpdatedAt())
+                .hasUncompletedCampaign(hasUncompleted)
                 .build();
     }
 }
+

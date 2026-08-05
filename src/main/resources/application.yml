@@ -48,11 +48,13 @@ logging:
 app:
   seeder:
     database:
-      enabled: false
+      enabled: true
     academic:
-      enabled: false
+      enabled: true
     workflow-step:
-      enabled: false
+      enabled: true
+    survey-campaign:
+      enabled: true
   logging:
     excluded-urls:
       - /api/v1/health

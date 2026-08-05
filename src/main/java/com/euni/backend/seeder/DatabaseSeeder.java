@@ -19,15 +19,14 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.HashSet;
+import java.util.Optional;
 import java.util.Set;
-import java.util.UUID;
-import java.util.logging.Level;
 
 @Component
 @RequiredArgsConstructor
 @Slf4j
 @Order(Ordered.HIGHEST_PRECEDENCE)
-@ConditionalOnProperty(name = "app.seeder.database.enabled", havingValue = "true")
+@ConditionalOnProperty(name = "app.seeder.database.enabled", havingValue = "true", matchIfMissing = true)
 public class DatabaseSeeder implements CommandLineRunner {
 
     private final FacultyRepository facultyRepository;
@@ -39,45 +38,49 @@ public class DatabaseSeeder implements CommandLineRunner {
     @Override
     @Transactional
     public void run(String... args) throws Exception {
-        log.info("Starting database seeding...");
+        log.info("Starting safe database seeding (natural key existence checks)...");
 
         // 1. Seed Faculties
-        Faculty itDept = seedFaculty(UUID.fromString("d1c2b3a4-5e6f-4a8b-9c0d-1e2f3a4b5c6d"), "Khoa Công nghệ Thông tin", "IT_FACULTY");
-        Faculty seFaculty = seedFaculty(UUID.fromString("d2c2b3a4-5e6f-4a8b-9c0d-1e2f3a4b5c6e"), "Khoa Công nghệ Phần mềm", "SE_FACULTY");
+        Faculty fitFaculty = seedFaculty("Khoa Công nghệ Thông tin", "IT_FACULTY");
+        Faculty seFaculty = seedFaculty("Khoa Kỹ thuật Phần mềm", "SE_FACULTY");
+        Faculty csFaculty = seedFaculty("Khoa Khoa học Máy tính", "CS_FACULTY");
+        Faculty isFaculty = seedFaculty("Khoa Hệ thống Thông tin", "IS_FACULTY");
 
         // 2. Seed Permissions
-        Permission makerPerm = seedPermission(UUID.fromString("f1c2b3a4-5e6f-4a8b-9c0d-1e2f3a4b5c61"), "Người lập biểu", "MAKER", "Có quyền tạo và chỉnh sửa hồ sơ");
-        Permission approverPerm = seedPermission(UUID.fromString("f1c2b3a4-5e6f-4a8b-9c0d-1e2f3a4b5c62"), "Người phê duyệt", "APPROVER", "Có quyền kiểm tra và phê duyệt hồ sơ");
-        Permission viewerPerm = seedPermission(UUID.fromString("f1c2b3a4-5e6f-4a8b-9c0d-1e2f3a4b5c63"), "Người xem", "VIEWER", "Chỉ có quyền xem thông tin");
+        Permission makerPerm = seedPermission("Người lập biểu", "MAKER", "Có quyền tạo và chỉnh sửa hồ sơ khảo sát");
+        Permission approverPerm = seedPermission("Người phê duyệt", "APPROVER", "Có quyền kiểm tra và phê duyệt hồ sơ khảo sát");
+        Permission viewerPerm = seedPermission("Người xem", "VIEWER", "Chỉ có quyền xem thông tin");
+        Permission adminPerm = seedPermission("Toàn quyền hệ thống", "ADMIN_ALL", "Có tất cả các quyền quản trị");
 
         // 3. Seed Roles
-        Role adminRole = seedRole(UUID.fromString("a1c2b3a4-5e6f-4a8b-9c0d-1e2f3a4b5c6f"), "Quản trị viên", "ADMIN",
-            new HashSet<>(Set.of(makerPerm, approverPerm, viewerPerm)));
-
-        Role lecturerRole = seedRole(UUID.fromString("a1c2b3a4-5e6f-4a8b-9c0d-1e2f3a4b5c60"), "Giảng viên", "LECTURER",
-            new HashSet<>(Set.of(makerPerm, viewerPerm)));
+        Role adminRole = seedRole("Quản trị viên", "ADMIN", new HashSet<>(Set.of(adminPerm, makerPerm, approverPerm, viewerPerm)));
+        Role managerRole = seedRole("Trưởng Khoa / Trưởng Bộ môn", "MANAGER", new HashSet<>(Set.of(makerPerm, approverPerm, viewerPerm)));
+        Role lecturerRole = seedRole("Giảng viên Biên soạn", "LECTURER", new HashSet<>(Set.of(makerPerm, viewerPerm)));
+        Role reviewerRole = seedRole("Hội đồng Thẩm định", "REVIEWER", new HashSet<>(Set.of(approverPerm, viewerPerm)));
 
         // 4. Seed Users
-        seedUser(UUID.fromString("b1c2b3a4-5e6f-4a8b-9c0d-1e2f3a4b5c61"), "admin", "admin@euni.edu.vn", "Quản trị viên Hệ thống", "admin123", "ADM-001", "Active", itDept, new HashSet<>(Set.of(adminRole)), 1L);
-        seedUser(UUID.fromString("b1c2b3a4-5e6f-4a8b-9c0d-1e2f3a4b5c62"), "lecturer_a", "lecturer_a@euni.edu.vn", "Nguyễn Văn A", "password", "GV-001", "Active", seFaculty, new HashSet<>(Set.of(lecturerRole)), 0L);
+        seedUser("admin", "admin@euni.edu.vn", "Quản trị viên Hệ thống", "admin123", "ADM-001", "Active", fitFaculty, new HashSet<>(Set.of(adminRole)), 1L);
+        seedUser("truongkhoa_cntt", "truongkhoa@euni.edu.vn", "PGS.TS. Trần Văn Trưởng", "password", "TK-001", "Active", fitFaculty, new HashSet<>(Set.of(managerRole)), 0L);
+        seedUser("lecturer_nguyen", "nguyen.va@euni.edu.vn", "ThS. Nguyễn Văn A", "password", "GV-001", "Active", seFaculty, new HashSet<>(Set.of(lecturerRole)), 0L);
+        seedUser("lecturer_tran", "tran.tb@euni.edu.vn", "TS. Trần Thị B", "password", "GV-002", "Active", isFaculty, new HashSet<>(Set.of(lecturerRole)), 0L);
+        seedUser("lecturer_le", "le.vc@euni.edu.vn", "PGS.TS. Lê Văn C", "password", "GV-003", "Active", csFaculty, new HashSet<>(Set.of(reviewerRole, lecturerRole)), 0L);
+        seedUser("reviewer_pham", "pham.vd@euni.edu.vn", "TS. Phạm Văn D", "password", "HD-001", "Active", fitFaculty, new HashSet<>(Set.of(reviewerRole)), 0L);
 
-        log.info("Database seeding completed.");
+        log.info("Base database seeding completed successfully.");
     }
 
-    private Faculty seedFaculty(UUID id, String name, String code) {
-        return facultyRepository.findById(id).orElseGet(() -> {
+    private Faculty seedFaculty(String name, String code) {
+        return facultyRepository.findByCode(code).orElseGet(() -> {
             Faculty faculty = new Faculty();
-            faculty.setId(id);
             faculty.setName(name);
             faculty.setCode(code);
             return facultyRepository.save(faculty);
         });
     }
 
-    private Permission seedPermission(UUID id, String name, String code, String description) {
-        return permissionRepository.findById(id).orElseGet(() -> {
+    private Permission seedPermission(String name, String code, String description) {
+        return permissionRepository.findByCode(code).orElseGet(() -> {
             Permission perm = new Permission();
-            perm.setId(id);
             perm.setName(name);
             perm.setCode(code);
             perm.setDescription(description);
@@ -85,10 +88,9 @@ public class DatabaseSeeder implements CommandLineRunner {
         });
     }
 
-    private Role seedRole(UUID id, String name, String code, Set<Permission> permissions) {
-        return roleRepository.findById(id).orElseGet(() -> {
+    private Role seedRole(String name, String code, Set<Permission> permissions) {
+        return roleRepository.findByCode(code).orElseGet(() -> {
             Role role = new Role();
-            role.setId(id);
             role.setName(name);
             role.setCode(code);
             role.setPermissions(permissions);
@@ -96,18 +98,32 @@ public class DatabaseSeeder implements CommandLineRunner {
         });
     }
 
-    private void seedUser(UUID id, String username, String email, String fullName, String rawPassword, String employeeId, String status, Faculty faculty, Set<Role> roles, Long tokenVersion) {
-        User user = userRepository.findByUsername(username).orElseGet(User::new);
-        user.setId(id);
-        user.setUsername(username);
-        user.setEmail(email);
-        user.setFullName(fullName);
-        user.setPassword(passwordEncoder.encode(rawPassword));
-        user.setEmployeeId(employeeId);
-        user.setStatus(status);
-        user.setFaculty(faculty);
-        user.setRoles(roles);
-        user.setTokenVersion(tokenVersion);
-        userRepository.save(user);
+    private void seedUser(String username, String email, String fullName, String rawPassword, String employeeId, String status, Faculty faculty, Set<Role> roles, Long tokenVersion) {
+        Optional<User> existingOpt = userRepository.findByUsernameOrEmailOrEmployeeId(username, email, employeeId);
+        if (existingOpt.isPresent()) {
+            User existing = existingOpt.get();
+            existing.setUsername(username);
+            existing.setEmail(email);
+            existing.setFullName(fullName);
+            if (employeeId != null) {
+                existing.setEmployeeId(employeeId);
+            }
+            existing.setStatus(status);
+            existing.setFaculty(faculty);
+            existing.setRoles(roles);
+            userRepository.save(existing);
+        } else {
+            User user = new User();
+            user.setUsername(username);
+            user.setEmail(email);
+            user.setFullName(fullName);
+            user.setPassword(passwordEncoder.encode(rawPassword));
+            user.setEmployeeId(employeeId);
+            user.setStatus(status);
+            user.setFaculty(faculty);
+            user.setRoles(roles);
+            user.setTokenVersion(tokenVersion != null ? tokenVersion : 0L);
+            userRepository.save(user);
+        }
     }
 }
