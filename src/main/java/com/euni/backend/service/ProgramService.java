@@ -173,7 +173,8 @@ public class ProgramService {
         programRepository.save(program);
     }
 
-    private ProgramDto toDto(Program program) {
+    public ProgramDto toDto(Program program) {
+        if (program == null) return null;
         boolean hasUncompleted = surveyCampaignRepository.existsByProgramIdAndStatusNotIn(
                 program.getId(), 
                 List.of(SurveyCampaignStatus.COMPLETED, SurveyCampaignStatus.APPROVED, SurveyCampaignStatus.CANCELLED));
@@ -183,8 +184,8 @@ public class ProgramService {
                 .name(program.getName())
                 .code(program.getCode())
                 .description(program.getDescription())
-                .majorId(program.getMajor().getId())
-                .majorName(program.getMajor().getName())
+                .majorId(program.getMajor() != null ? program.getMajor().getId() : null)
+                .majorName(program.getMajor() != null ? program.getMajor().getName() : null)
                 .status(program.getStatus())
                 .generalObjective(program.getGeneralObjective())
                 .specificObjectives(program.getSpecificObjectives())

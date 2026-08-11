@@ -31,7 +31,7 @@ public class SurveyCampaignRequest {
         private Integer stepIndex;
         private String stepName;
         private LocalDateTime deadline;
-        private List<String> requiredDocuments;
-        private Map<String, Object> configuration;
+        private Object requiredDocuments;
+        private Object configuration;
     }
 }

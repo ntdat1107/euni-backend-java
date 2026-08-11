@@ -19,6 +19,7 @@ import org.springframework.transaction.annotation.Transactional;
 import com.euni.backend.dto.request.SurveyCampaignRequest;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -35,6 +36,7 @@ public class SurveyCampaignService {
     private final ProgramCourseRepository programCourseRepository;
     private final CourseRepository courseRepository;
     private final ObjectMapper objectMapper;
+    private final SurveyCampaignCourseRepository surveyCampaignCourseRepository;
 
     @Transactional(readOnly = true)
     public List<SurveyCampaignDto> getAll() {
@@ -89,16 +91,29 @@ public class SurveyCampaignService {
                 .steps(new ArrayList<>())
                 .build();
 
+        boolean hasStep5 = false;
         if (request.getSteps() != null) {
             for (SurveyCampaignRequest.SurveyCampaignStepRequest sReq : request.getSteps()) {
                 String reqDocsJson = "[]";
                 String configJson = "{}";
                 try {
                     if (sReq.getRequiredDocuments() != null) {
-                        reqDocsJson = objectMapper.writeValueAsString(sReq.getRequiredDocuments());
+                        if (sReq.getRequiredDocuments() instanceof String) {
+                            reqDocsJson = (String) sReq.getRequiredDocuments();
+                        } else {
+                            reqDocsJson = objectMapper.writeValueAsString(sReq.getRequiredDocuments());
+                        }
                     }
                     if (sReq.getConfiguration() != null) {
-                        configJson = objectMapper.writeValueAsString(sReq.getConfiguration());
+                        if (sReq.getConfiguration() instanceof String) {
+                            configJson = (String) sReq.getConfiguration();
+                        } else {
+                            configJson = objectMapper.writeValueAsString(sReq.getConfiguration());
+                        }
+                        String screenCode = extractScreenCode(configJson);
+                        if ("S5_CLO".equals(screenCode)) {
+                            hasStep5 = true;
+                        }
                     }
                 } catch (Exception e) {
                     log.error("Error serializing step config/documents", e);
@@ -119,6 +134,23 @@ public class SurveyCampaignService {
         }
 
         SurveyCampaign saved = campaignRepository.save(campaign);
+
+        // If campaign workflow contains Step 5 (S5_CLO), initialize survey_campaign_courses for all program courses
+        if (hasStep5) {
+            List<ProgramCourse> programCourses = programCourseRepository.findAllByProgramId(program.getId());
+            for (ProgramCourse pc : programCourses) {
+                if (!surveyCampaignCourseRepository.existsByCampaignIdAndCourseId(saved.getId(), pc.getCourse().getId())) {
+                    SurveyCampaignCourse scc = SurveyCampaignCourse.builder()
+                            .campaign(saved)
+                            .course(pc.getCourse())
+                            .status("DRAFT")
+                            .syllabusData("{}")
+                            .build();
+                    surveyCampaignCourseRepository.save(scc);
+                }
+            }
+        }
+
         return convertToDto(saved);
     }
 
@@ -157,10 +189,20 @@ public class SurveyCampaignService {
                         if (sReq.getDeadline() != null) step.setDeadline(sReq.getDeadline());
                         try {
                             if (sReq.getRequiredDocuments() != null) {
-                                step.setRequiredDocuments(objectMapper.writeValueAsString(sReq.getRequiredDocuments()));
+                                Object docsObj = sReq.getRequiredDocuments();
+                                if (docsObj instanceof String) {
+                                    step.setRequiredDocuments((String) docsObj);
+                                } else {
+                                    step.setRequiredDocuments(objectMapper.writeValueAsString(docsObj));
+                                }
                             }
                             if (sReq.getConfiguration() != null) {
-                                step.setConfiguration(objectMapper.writeValueAsString(sReq.getConfiguration()));
+                                Object configObj = sReq.getConfiguration();
+                                if (configObj instanceof String) {
+                                    step.setConfiguration((String) configObj);
+                                } else {
+                                    step.setConfiguration(objectMapper.writeValueAsString(configObj));
+                                }
                             }
                         } catch (Exception e) {
                             log.error("Error serializing step update config", e);
@@ -342,7 +384,22 @@ public class SurveyCampaignService {
         }
     }
 
+    private final ProgramService programService;
+    private final WorkflowTemplateService workflowTemplateService;
+
     private SurveyCampaignDto convertToDto(SurveyCampaign entity) {
+        List<SurveyCampaignCourse> courseEntities = surveyCampaignCourseRepository.findByCampaignId(entity.getId());
+        List<com.euni.backend.dto.SurveyCampaignCourseMetaDto> courseMetas = courseEntities.stream()
+                .map(scc -> com.euni.backend.dto.SurveyCampaignCourseMetaDto.builder()
+                        .id(scc.getId())
+                        .courseId(scc.getCourse().getId())
+                        .courseCode(scc.getCourse().getCode())
+                        .courseName(scc.getCourse().getName())
+                        .credits(scc.getCourse().getCredits())
+                        .status(scc.getStatus())
+                        .build())
+                .collect(Collectors.toList());
+
         return SurveyCampaignDto.builder()
                 .id(entity.getId())
                 .code(entity.getCode())
@@ -350,16 +407,72 @@ public class SurveyCampaignService {
                 .description(entity.getDescription())
                 .programId(entity.getProgram() != null ? entity.getProgram().getId() : null)
                 .programName(entity.getProgram() != null ? entity.getProgram().getName() : null)
+                .program(entity.getProgram() != null ? programService.toDto(entity.getProgram()) : null)
                 .workflowTemplateId(entity.getWorkflowTemplate() != null ? entity.getWorkflowTemplate().getId() : null)
                 .workflowTemplateName(entity.getWorkflowTemplate() != null ? entity.getWorkflowTemplate().getName() : null)
+                .workflowTemplate(entity.getWorkflowTemplate() != null ? workflowTemplateService.getTemplateById(entity.getWorkflowTemplate().getId()) : null)
                 .startDate(entity.getStartDate())
                 .endDate(entity.getEndDate())
                 .status(entity.getStatus() != null ? entity.getStatus().name() : "DRAFT")
+                .courses(courseMetas)
                 .createdAt(entity.getCreatedAt())
                 .updatedAt(entity.getUpdatedAt())
                 .createdBy(entity.getCreatedBy())
                 .updatedBy(entity.getUpdatedBy())
                 .steps(entity.getSteps() != null ? entity.getSteps().stream().map(this::convertToStepDto).collect(Collectors.toList()) : List.of())
+                .build();
+    }
+
+    @Transactional(readOnly = true)
+    public com.euni.backend.dto.SurveyCampaignCourseDetailDto getCampaignCourseDetail(UUID campaignId, UUID courseId) {
+        SurveyCampaignCourse scc = surveyCampaignCourseRepository.findByCampaignIdAndCourseId(campaignId, courseId)
+                .orElseThrow(() -> new ResourceNotFoundException("SurveyCampaignCourse", "campaignId/courseId", campaignId + "/" + courseId));
+
+        return com.euni.backend.dto.SurveyCampaignCourseDetailDto.builder()
+                .id(scc.getId())
+                .campaignId(scc.getCampaign().getId())
+                .courseId(scc.getCourse().getId())
+                .courseCode(scc.getCourse().getCode())
+                .courseName(scc.getCourse().getName())
+                .credits(scc.getCourse().getCredits())
+                .status(scc.getStatus())
+                .syllabusData(scc.getSyllabusData())
+                .createdAt(scc.getCreatedAt())
+                .updatedAt(scc.getUpdatedAt())
+                .createdBy(scc.getCreatedBy())
+                .updatedBy(scc.getUpdatedBy())
+                .build();
+    }
+
+    @Transactional
+    public com.euni.backend.dto.SurveyCampaignCourseDetailDto saveCampaignCourseDetail(UUID campaignId, UUID courseId, Map<String, Object> data) {
+        SurveyCampaignCourse scc = surveyCampaignCourseRepository.findByCampaignIdAndCourseId(campaignId, courseId)
+                .orElseThrow(() -> new ResourceNotFoundException("SurveyCampaignCourse", "campaignId/courseId", campaignId + "/" + courseId));
+
+        if (data.get("syllabusData") != null) {
+            scc.setSyllabusData(data.get("syllabusData").toString());
+        }
+        if (data.get("status") != null) {
+            scc.setStatus(data.get("status").toString());
+        } else {
+            scc.setStatus("COMPLETED");
+        }
+
+        SurveyCampaignCourse saved = surveyCampaignCourseRepository.save(scc);
+
+        return com.euni.backend.dto.SurveyCampaignCourseDetailDto.builder()
+                .id(saved.getId())
+                .campaignId(saved.getCampaign().getId())
+                .courseId(saved.getCourse().getId())
+                .courseCode(saved.getCourse().getCode())
+                .courseName(saved.getCourse().getName())
+                .credits(saved.getCourse().getCredits())
+                .status(saved.getStatus())
+                .syllabusData(saved.getSyllabusData())
+                .createdAt(saved.getCreatedAt())
+                .updatedAt(saved.getUpdatedAt())
+                .createdBy(saved.getCreatedBy())
+                .updatedBy(saved.getUpdatedBy())
                 .build();
     }
 

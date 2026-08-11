@@ -15,3 +15,5 @@ import java.util.UUID;
 public class CourseAssignmentRequest {
     private List<UUID> courseIds;
 }
+
+

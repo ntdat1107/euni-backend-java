@@ -1,5 +1,6 @@
 package com.euni.backend.dto;
 
+import com.euni.backend.dto.response.WorkflowTemplateResponse;
 import lombok.*;
 import java.time.LocalDateTime;
 import java.time.ZonedDateTime;
@@ -18,14 +19,18 @@ public class SurveyCampaignDto {
     private String description;
     private UUID programId;
     private String programName;
+    private ProgramDto program;
     private UUID workflowTemplateId;
     private String workflowTemplateName;
+    private WorkflowTemplateResponse workflowTemplate;
     private LocalDateTime startDate;
     private LocalDateTime endDate;
     private String status;
+    private List<SurveyCampaignCourseMetaDto> courses;
     private List<SurveyCampaignStepDto> steps;
     private ZonedDateTime createdAt;
     private ZonedDateTime updatedAt;
     private String createdBy;
     private String updatedBy;
 }
+

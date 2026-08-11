@@ -5,7 +5,11 @@ import com.euni.backend.entity.SurveyCampaign;
 import com.euni.backend.entity.SurveyCampaignStep;
 import com.euni.backend.entity.WorkflowTemplate;
 import com.euni.backend.entity.enums.SurveyCampaignStatus;
+import com.euni.backend.entity.ProgramCourse;
+import com.euni.backend.entity.SurveyCampaignCourse;
+import com.euni.backend.repository.ProgramCourseRepository;
 import com.euni.backend.repository.ProgramRepository;
+import com.euni.backend.repository.SurveyCampaignCourseRepository;
 import com.euni.backend.repository.SurveyCampaignRepository;
 import com.euni.backend.repository.WorkflowTemplateRepository;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -31,6 +35,8 @@ public class SurveyCampaignSeeder implements CommandLineRunner {
     private final SurveyCampaignRepository surveyCampaignRepository;
     private final ProgramRepository programRepository;
     private final WorkflowTemplateRepository workflowTemplateRepository;
+    private final ProgramCourseRepository programCourseRepository;
+    private final SurveyCampaignCourseRepository surveyCampaignCourseRepository;
     private final ObjectMapper objectMapper;
 
     @Override
@@ -85,7 +91,9 @@ public class SurveyCampaignSeeder implements CommandLineRunner {
 
                 List<SurveyCampaignStep> steps = buildStepsFromTemplate(campaign, wfTemplate);
                 campaign.setSteps(steps);
-                return surveyCampaignRepository.save(campaign);
+                SurveyCampaign saved = surveyCampaignRepository.save(campaign);
+                seedCampaignCourses(saved, program);
+                return saved;
             } catch (Exception e) {
                 log.error("Failed to seed campaign {}", code, e);
                 return null;
@@ -111,7 +119,9 @@ public class SurveyCampaignSeeder implements CommandLineRunner {
                 List<SurveyCampaignStep> steps = buildStepsFromTemplate(campaign, wfTemplate);
                 steps.forEach(s -> s.setStatus("COMPLETED"));
                 campaign.setSteps(steps);
-                return surveyCampaignRepository.save(campaign);
+                SurveyCampaign saved = surveyCampaignRepository.save(campaign);
+                seedCampaignCourses(saved, program);
+                return saved;
             } catch (Exception e) {
                 log.error("Failed to seed campaign {}", code, e);
                 return null;
@@ -136,12 +146,33 @@ public class SurveyCampaignSeeder implements CommandLineRunner {
 
                 List<SurveyCampaignStep> steps = buildStepsFromTemplate(campaign, wfTemplate);
                 campaign.setSteps(steps);
-                return surveyCampaignRepository.save(campaign);
+                SurveyCampaign saved = surveyCampaignRepository.save(campaign);
+                seedCampaignCourses(saved, program);
+                return saved;
             } catch (Exception e) {
                 log.error("Failed to seed campaign {}", code, e);
                 return null;
             }
         });
+    }
+
+    private void seedCampaignCourses(SurveyCampaign campaign, Program program) {
+        try {
+            List<ProgramCourse> pcs = programCourseRepository.findAllByProgramId(program.getId());
+            for (ProgramCourse pc : pcs) {
+                if (!surveyCampaignCourseRepository.existsByCampaignIdAndCourseId(campaign.getId(), pc.getCourse().getId())) {
+                    SurveyCampaignCourse scc = SurveyCampaignCourse.builder()
+                            .campaign(campaign)
+                            .course(pc.getCourse())
+                            .status(campaign.getStatus() == SurveyCampaignStatus.APPROVED ? "COMPLETED" : "DRAFT")
+                            .syllabusData("{}")
+                            .build();
+                    surveyCampaignCourseRepository.save(scc);
+                }
+            }
+        } catch (Exception e) {
+            log.error("Failed to seed campaign courses for campaign {}", campaign.getCode(), e);
+        }
     }
 
     @SuppressWarnings("unchecked")

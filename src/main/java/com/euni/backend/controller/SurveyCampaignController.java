@@ -68,6 +68,21 @@ public class SurveyCampaignController extends BaseController {
         return ok(campaignService.saveStepData(id, stepId, resultData));
     }
 
+    @GetMapping("/{id}/courses/{courseId}")
+    public ResponseEntity<ApiResponse<com.euni.backend.dto.SurveyCampaignCourseDetailDto>> getCampaignCourseDetail(
+            @PathVariable UUID id,
+            @PathVariable UUID courseId) {
+        return ok(campaignService.getCampaignCourseDetail(id, courseId));
+    }
+
+    @PostMapping("/{id}/courses/{courseId}/save")
+    public ResponseEntity<ApiResponse<com.euni.backend.dto.SurveyCampaignCourseDetailDto>> saveCampaignCourseDetail(
+            @PathVariable UUID id,
+            @PathVariable UUID courseId,
+            @RequestBody Map<String, Object> data) {
+        return ok("Lưu đề cương học phần thành công", campaignService.saveCampaignCourseDetail(id, courseId, data));
+    }
+
     @PostMapping("/{id}/approve")
     public ResponseEntity<ApiResponse<Void>> approveCampaign(@PathVariable UUID id) {
         campaignService.approveCampaign(id);
