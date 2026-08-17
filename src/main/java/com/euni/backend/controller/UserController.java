@@ -9,7 +9,6 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
-import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/users")
@@ -31,21 +30,21 @@ public class UserController extends BaseController {
     }
 
     @GetMapping("/{id}")
-    @PreAuthorize("hasRole('ADMIN') or principal.username == #id")
-    public ResponseEntity<ApiResponse<UserDto>> getUserById(@PathVariable UUID id) {
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<ApiResponse<UserDto>> getUserById(@PathVariable Long id) {
         return ok(userService.getUserById(id));
     }
 
     @DeleteMapping("/{id}")
     @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<ApiResponse<Void>> deleteUser(@PathVariable UUID id) {
+    public ResponseEntity<ApiResponse<Void>> deleteUser(@PathVariable Long id) {
         userService.deleteUser(id);
         return ok(null);
     }
 
     @PatchMapping("/{id}/status")
     @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<ApiResponse<Void>> updateUserStatus(@PathVariable UUID id, @RequestParam String status) {
+    public ResponseEntity<ApiResponse<Void>> updateUserStatus(@PathVariable Long id, @RequestParam String status) {
         userService.updateUserStatus(id, status);
         return ok(null);
     }
@@ -58,13 +57,13 @@ public class UserController extends BaseController {
 
     @PutMapping("/{id}")
     @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<ApiResponse<UserDto>> updateUser(@PathVariable UUID id, @RequestBody UserDto userDto) {
+    public ResponseEntity<ApiResponse<UserDto>> updateUser(@PathVariable Long id, @RequestBody UserDto userDto) {
         return ok(userService.updateUser(id, userDto));
     }
 
     @PutMapping("/{id}/reset-password")
     @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<ApiResponse<java.util.Map<String, String>>> resetPassword(@PathVariable UUID id) {
+    public ResponseEntity<ApiResponse<java.util.Map<String, String>>> resetPassword(@PathVariable Long id) {
         return ok(userService.resetPassword(id));
     }
 

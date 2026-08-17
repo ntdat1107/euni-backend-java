@@ -1,12 +1,12 @@
 package com.euni.backend.service;
 
 import com.euni.backend.dto.ProgramDto;
+import com.euni.backend.entity.Course;
 import com.euni.backend.entity.Major;
 import com.euni.backend.entity.Program;
-import com.euni.backend.entity.enums.ProgramStatus;
 import com.euni.backend.entity.ProgramCourse;
-import com.euni.backend.entity.Course;
-import com.euni.backend.entity.history.ProgramHistory;
+import com.euni.backend.entity.enums.ProgramStatus;
+import com.euni.backend.entity.enums.SurveyCampaignStatus;
 import com.euni.backend.repository.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -14,7 +14,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Optional;
-import java.util.UUID;
 import java.util.stream.Collectors;
 
 @Service
@@ -27,7 +26,16 @@ public class ProgramService {
     private final ProgramCourseRepository programCourseRepository;
     private final CourseRepository courseRepository;
     private final ProgramCourseHistoryRepository programCourseHistoryRepository;
+    private final SurveyCampaignRepository surveyCampaignRepository;
     private final jakarta.persistence.EntityManager entityManager;
+
+    private void checkActiveSurveyCampaign(Long programId) {
+        if (surveyCampaignRepository.existsByProgramIdAndStatusNotIn(
+                programId, 
+                List.of(SurveyCampaignStatus.COMPLETED, SurveyCampaignStatus.APPROVED, SurveyCampaignStatus.CANCELLED))) {
+            throw new RuntimeException("Không thể chỉnh sửa hoặc gán môn học cho Chương trình đào tạo do đang có Đợt khảo sát chưa hoàn thành!");
+        }
+    }
 
     @Transactional(readOnly = true)
     public List<ProgramDto> getAllPrograms() {
@@ -60,7 +68,9 @@ public class ProgramService {
     }
 
     @Transactional
-    public ProgramDto updateProgram(UUID id, ProgramDto dto) {
+    public ProgramDto updateProgram(Long id, ProgramDto dto) {
+        checkActiveSurveyCampaign(id);
+
         Program program = programRepository.findActiveById(id)
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy chương trình đào tạo"));
         
@@ -81,11 +91,13 @@ public class ProgramService {
     }
 
     @Transactional
-    public void assignCourses(UUID programId, List<UUID> courseIds) {
+    public void assignCourses(Long programId, List<Long> courseIds) {
+        checkActiveSurveyCampaign(programId);
+
         Program program = programRepository.findActiveById(programId)
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy chương trình đào tạo"));
 
-        java.util.Set<UUID> uniqueCourseIds = new java.util.HashSet<>(courseIds);
+        java.util.Set<Long> uniqueCourseIds = new java.util.HashSet<>(courseIds);
 
         // Record REMOVED history for those not in the new list
         List<ProgramCourse> currentMappings = programCourseRepository.findAllByProgramId(programId);
@@ -101,7 +113,7 @@ public class ProgramService {
         entityManager.clear(); // Clear context to avoid stale entities
 
         int index = 0;
-        for (UUID courseId : uniqueCourseIds) {
+        for (Long courseId : uniqueCourseIds) {
             Optional<ProgramCourse> existingPc = programCourseRepository.findByProgramIdAndCourseIdIncludingDeleted(programId, courseId);
             
             if (existingPc.isPresent()) {
@@ -143,34 +155,60 @@ public class ProgramService {
     }
 
     @Transactional(readOnly = true)
-    public List<UUID> getCourseIdsByProgram(UUID programId) {
+    public List<Long> getCourseIdsByProgram(Long programId) {
         return programCourseRepository.findAllByProgramId(programId).stream()
                 .map(pc -> pc.getCourse().getId())
                 .collect(Collectors.toList());
     }
 
+    @Transactional(readOnly = true)
+    public List<com.euni.backend.dto.ProgramCourseDetailDto> getProgramCoursesDetail(Long programId) {
+        return programCourseRepository.findAllByProgramId(programId).stream()
+                .map(pc -> com.euni.backend.dto.ProgramCourseDetailDto.builder()
+                        .id(pc.getId())
+                        .programId(pc.getProgram().getId())
+                        .courseId(pc.getCourse().getId())
+                        .courseCode(pc.getCourse().getCode())
+                        .courseName(pc.getCourse().getName())
+                        .credits(pc.getCourse().getCredits())
+                        .semester(pc.getSemester())
+                        .required(pc.getRequired())
+                        .data(pc.getData())
+                        .build())
+                .collect(Collectors.toList());
+    }
+
     @Transactional
-    public void deleteProgram(UUID id) {
+    public void deleteProgram(Long id) {
+        checkActiveSurveyCampaign(id);
+
         Program program = programRepository.findActiveById(id)
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy chương trình đào tạo"));
         program.setDeleted(true);
         programRepository.save(program);
     }
 
-    private ProgramDto toDto(Program program) {
+    public ProgramDto toDto(Program program) {
+        if (program == null) return null;
+        boolean hasUncompleted = surveyCampaignRepository.existsByProgramIdAndStatusNotIn(
+                program.getId(), 
+                List.of(SurveyCampaignStatus.COMPLETED, SurveyCampaignStatus.APPROVED, SurveyCampaignStatus.CANCELLED));
+
         return ProgramDto.builder()
                 .id(program.getId())
                 .name(program.getName())
                 .code(program.getCode())
                 .description(program.getDescription())
-                .majorId(program.getMajor().getId())
-                .majorName(program.getMajor().getName())
+                .majorId(program.getMajor() != null ? program.getMajor().getId() : null)
+                .majorName(program.getMajor() != null ? program.getMajor().getName() : null)
                 .status(program.getStatus())
                 .generalObjective(program.getGeneralObjective())
                 .specificObjectives(program.getSpecificObjectives())
                 .learningOutcomes(program.getLearningOutcomes())
+                .data(program.getData())
                 .createdAt(program.getCreatedAt())
                 .updatedAt(program.getUpdatedAt())
+                .hasUncompletedCampaign(hasUncompleted)
                 .build();
     }
 }

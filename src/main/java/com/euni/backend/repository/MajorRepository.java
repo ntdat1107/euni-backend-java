@@ -9,10 +9,9 @@ import org.springframework.stereotype.Repository;
 
 import java.util.List;
 import java.util.Optional;
-import java.util.UUID;
 
 @Repository
-public interface MajorRepository extends JpaRepository<Major, UUID> {
+public interface MajorRepository extends JpaRepository<Major, Long> {
     @EntityGraph(attributePaths = {"faculty"})
     @Query("SELECT m FROM Major m WHERE m.deleted = false")
     List<Major> findAllActive();
@@ -24,5 +23,5 @@ public interface MajorRepository extends JpaRepository<Major, UUID> {
     Optional<Major> findByCode(@Param("code") String code);
 
     @Query("SELECT m FROM Major m WHERE m.id = :id AND m.deleted = false")
-    Optional<Major> findActiveById(@Param("id") UUID id);
+    Optional<Major> findActiveById(@Param("id") Long id);
 }

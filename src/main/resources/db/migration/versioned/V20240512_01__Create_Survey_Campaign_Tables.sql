@@ -5,13 +5,19 @@
 DROP TABLE IF EXISTS survey_campaign_steps CASCADE;
 DROP TABLE IF EXISTS survey_campaigns CASCADE;
 
+DROP SEQUENCE IF EXISTS survey_campaigns_id_seq CASCADE;
+DROP SEQUENCE IF EXISTS survey_campaign_steps_id_seq CASCADE;
+
+CREATE SEQUENCE survey_campaigns_id_seq START WITH 1 INCREMENT BY 1;
+CREATE SEQUENCE survey_campaign_steps_id_seq START WITH 1 INCREMENT BY 1;
+
 CREATE TABLE survey_campaigns (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    id BIGINT DEFAULT nextval('survey_campaigns_id_seq') PRIMARY KEY,
     code VARCHAR(50) NOT NULL UNIQUE,
     name VARCHAR(255) NOT NULL,
     description TEXT,
-    program_id UUID NOT NULL REFERENCES programs(id),
-    workflow_template_id UUID NOT NULL REFERENCES workflow_templates(id),
+    program_id BIGINT NOT NULL REFERENCES programs(id),
+    workflow_template_id BIGINT NOT NULL REFERENCES workflow_templates(id),
     start_date TIMESTAMP NOT NULL,
     end_date TIMESTAMP NOT NULL,
     status VARCHAR(20) NOT NULL DEFAULT 'DRAFT',
@@ -23,8 +29,8 @@ CREATE TABLE survey_campaigns (
 );
 
 CREATE TABLE survey_campaign_steps (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    campaign_id UUID NOT NULL REFERENCES survey_campaigns(id) ON DELETE CASCADE,
+    id BIGINT DEFAULT nextval('survey_campaign_steps_id_seq') PRIMARY KEY,
+    campaign_id BIGINT NOT NULL REFERENCES survey_campaigns(id) ON DELETE CASCADE,
     step_index INT NOT NULL,
     step_name VARCHAR(255) NOT NULL,
     deadline TIMESTAMP,

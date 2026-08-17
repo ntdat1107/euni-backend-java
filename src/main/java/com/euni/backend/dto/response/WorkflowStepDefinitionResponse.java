@@ -7,14 +7,13 @@ import lombok.NoArgsConstructor;
 
 import java.time.ZonedDateTime;
 import java.util.List;
-import java.util.UUID;
 
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
 public class WorkflowStepDefinitionResponse {
-    private UUID id;
+    private Long id;
     private String workflowType;
     private String stepCode;
     private String stepName;

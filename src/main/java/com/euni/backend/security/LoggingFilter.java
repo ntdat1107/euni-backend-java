@@ -33,7 +33,7 @@ public class LoggingFilter extends OncePerRequestFilter {
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
             throws ServletException, IOException {
 
-        if (isExcluded(request.getRequestURI())) {
+        if (isExcluded(request.getRequestURI()) || request.getRequestURI().startsWith("/api/ai/")) {
             filterChain.doFilter(request, response);
             return;
         }

@@ -3,6 +3,7 @@ package com.euni.backend.config;
 import com.euni.backend.security.JwtAuthenticationFilter;
 import com.euni.backend.security.LoggingFilter;
 
+import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -42,20 +43,25 @@ public class SecurityConfig {
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http.csrf(AbstractHttpConfigurer::disable)
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .securityContext(context -> context.requireExplicitSave(false))
                 .authorizeHttpRequests(auth -> 
-                    auth.requestMatchers("/api/auth/**").permitAll()
+                    auth.dispatcherTypeMatchers(jakarta.servlet.DispatcherType.ASYNC).permitAll()
+                        .requestMatchers("/api/auth/**").permitAll()
                         .requestMatchers("/api/v1/health", "/api/v1/health/**").permitAll()
+                        .requestMatchers("/api/ai/**").authenticated()
                         .anyRequest().authenticated()
                 )
                 .exceptionHandling(exception -> exception
                     .authenticationEntryPoint((request, response, authException) -> {
+                        if (response.isCommitted()) return;
                         response.setContentType("application/json;charset=UTF-8");
-                        response.setStatus(jakarta.servlet.http.HttpServletResponse.SC_UNAUTHORIZED);
+                        response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
                         response.getWriter().write("{\"success\": false, \"code\": \"UNAUTHORIZED\", \"message\": \"Phiên đăng nhập hết hạn hoặc không hợp lệ. Vui lòng đăng nhập lại.\"}");
                     })
                     .accessDeniedHandler((request, response, accessDeniedException) -> {
+                        if (response.isCommitted()) return;
                         response.setContentType("application/json;charset=UTF-8");
-                        response.setStatus(jakarta.servlet.http.HttpServletResponse.SC_FORBIDDEN);
+                        response.setStatus(HttpServletResponse.SC_FORBIDDEN);
                         response.getWriter().write("{\"success\": false, \"code\": \"FORBIDDEN\", \"message\": \"Bạn không có quyền thực hiện hành động này.\"}");
                     })
                 );

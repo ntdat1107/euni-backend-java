@@ -2,12 +2,9 @@ package com.euni.backend.entity;
 
 import jakarta.persistence.*;
 import lombok.*;
-import org.hibernate.annotations.GenericGenerator;
 import org.springframework.data.annotation.CreatedBy;
 import org.springframework.data.annotation.LastModifiedBy;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
-
-import java.util.UUID;
 
 @Entity
 @Table(name = "workflow_step_definitions")
@@ -19,10 +16,9 @@ import java.util.UUID;
 @EntityListeners(AuditingEntityListener.class)
 public class WorkflowStepDefinition extends BaseEntity {
     @Id
-    @GeneratedValue(generator = "UUID")
-    @GenericGenerator(name = "UUID", strategy = "org.hibernate.id.UUIDGenerator")
-    @Column(name = "id", updatable = false, nullable = false)
-    private UUID id;
+    @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "workflow_step_definitions_id_seq")
+    @SequenceGenerator(name = "workflow_step_definitions_id_seq", sequenceName = "workflow_step_definitions_id_seq", allocationSize = 1)
+    private Long id;
 
     @Column(name = "workflow_type", nullable = false)
     private String workflowType; // SURVEY_CREATE, SURVEY_UPDATE

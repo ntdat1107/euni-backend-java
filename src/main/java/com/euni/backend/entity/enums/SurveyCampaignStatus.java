@@ -5,5 +5,6 @@ public enum SurveyCampaignStatus {
     ACTIVE,
     CLOSED,
     COMPLETED,
-    APPROVED
+    APPROVED,
+    CANCELLED
 }

@@ -10,21 +10,20 @@ import java.time.LocalDateTime;
 import java.time.ZonedDateTime;
 import java.util.List;
 import java.util.Map;
-import java.util.UUID;
 
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
 public class SurveyCampaignResponse {
-    private UUID id;
+    private Long id;
     private String code;
     private String name;
     private String description;
-    private UUID programId;
+    private Long programId;
     private String programCode;
     private String programName;
-    private UUID workflowTemplateId;
+    private Long workflowTemplateId;
     private String workflowTemplateName;
     private LocalDateTime startDate;
     private LocalDateTime endDate;
@@ -37,7 +36,7 @@ public class SurveyCampaignResponse {
     @AllArgsConstructor
     @Builder
     public static class SurveyCampaignStepResponse {
-        private UUID id;
+        private Long id;
         private Integer stepIndex;
         private String stepName;
         private LocalDateTime deadline;

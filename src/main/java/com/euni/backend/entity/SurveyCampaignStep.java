@@ -2,13 +2,8 @@ package com.euni.backend.entity;
 
 import jakarta.persistence.*;
 import lombok.*;
-import org.hibernate.annotations.SQLDelete;
-import org.hibernate.annotations.SQLRestriction;
 
 import java.time.LocalDateTime;
-import java.util.HashSet;
-import java.util.Set;
-import java.util.UUID;
 
 @Entity
 @Table(name = "survey_campaign_steps")
@@ -19,8 +14,9 @@ import java.util.UUID;
 @Builder
 public class SurveyCampaignStep extends BaseEntity {
     @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
-    private UUID id;
+    @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "survey_campaign_steps_id_seq")
+    @SequenceGenerator(name = "survey_campaign_steps_id_seq", sequenceName = "survey_campaign_steps_id_seq", allocationSize = 1)
+    private Long id;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "campaign_id", nullable = false)

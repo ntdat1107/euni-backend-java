@@ -2,10 +2,6 @@ package com.euni.backend.entity;
 
 import jakarta.persistence.*;
 import lombok.*;
-import org.hibernate.annotations.SQLDelete;
-import org.hibernate.annotations.SQLRestriction;
-
-import java.util.UUID;
 
 @Entity
 @Table(name = "courses")
@@ -16,8 +12,9 @@ import java.util.UUID;
 @Builder
 public class Course extends BaseEntity {
     @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
-    private UUID id;
+    @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "courses_id_seq")
+    @SequenceGenerator(name = "courses_id_seq", sequenceName = "courses_id_seq", allocationSize = 1)
+    private Long id;
 
     @Column(nullable = false)
     private String name;

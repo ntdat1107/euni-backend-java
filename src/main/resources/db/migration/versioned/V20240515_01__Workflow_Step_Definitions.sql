@@ -2,10 +2,13 @@
 -- Created: 2026-05-15
 
 DROP TABLE IF EXISTS workflow_step_definitions CASCADE;
+DROP SEQUENCE IF EXISTS workflow_step_definitions_id_seq CASCADE;
+
+CREATE SEQUENCE workflow_step_definitions_id_seq START WITH 1 INCREMENT BY 1;
 
 -- Create workflow step definitions table
 CREATE TABLE IF NOT EXISTS workflow_step_definitions (
-    id UUID PRIMARY KEY,
+    id BIGINT DEFAULT nextval('workflow_step_definitions_id_seq') PRIMARY KEY,
     workflow_type VARCHAR(255) NOT NULL,
     step_code VARCHAR(255) NOT NULL UNIQUE,
     step_name VARCHAR(255) NOT NULL,

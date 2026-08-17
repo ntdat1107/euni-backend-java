@@ -53,6 +53,8 @@ app:
       enabled: true
     workflow-step:
       enabled: true
+    survey-campaign:
+      enabled: true
   logging:
     excluded-urls:
       - /api/v1/health

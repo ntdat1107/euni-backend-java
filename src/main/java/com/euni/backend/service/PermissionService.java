@@ -9,7 +9,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
-import java.util.UUID;
 import java.util.stream.Collectors;
 
 @Service
@@ -33,7 +32,7 @@ public class PermissionService {
     }
 
     @Transactional
-    public void deletePermission(UUID id) {
+    public void deletePermission(Long id) {
         Permission permission = permissionRepository.findActiveById(id)
                 .orElseThrow(() -> new RuntimeException("Permission not found"));
         permission.setDeleted(true);

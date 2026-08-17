@@ -12,7 +12,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.HashSet;
 import java.util.List;
-import java.util.UUID;
 import java.util.stream.Collectors;
 
 @Service
@@ -37,7 +36,7 @@ public class RoleService {
     }
 
     @Transactional
-    public void deleteRole(UUID id) {
+    public void deleteRole(Long id) {
         Role role = roleRepository.findActiveById(id)
                 .orElseThrow(() -> new RuntimeException("Role not found"));
         role.setDeleted(true);
@@ -45,7 +44,7 @@ public class RoleService {
     }
 
     @Transactional
-    public RoleDto updateRolePermissions(UUID roleId, List<UUID> permissionIds) {
+    public RoleDto updateRolePermissions(Long roleId, List<Long> permissionIds) {
         Role role = roleRepository.findActiveById(roleId)
                 .orElseThrow(() -> new RuntimeException("Role not found"));
         

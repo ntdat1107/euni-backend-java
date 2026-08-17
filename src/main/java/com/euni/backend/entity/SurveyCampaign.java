@@ -3,8 +3,6 @@ package com.euni.backend.entity;
 import com.euni.backend.entity.enums.SurveyCampaignStatus;
 import jakarta.persistence.*;
 import lombok.*;
-import org.hibernate.annotations.SQLDelete;
-import org.hibernate.annotations.SQLRestriction;
 import org.springframework.data.annotation.CreatedBy;
 import org.springframework.data.annotation.LastModifiedBy;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
@@ -12,7 +10,6 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.UUID;
 
 @Entity
 @Table(name = "survey_campaigns")
@@ -24,8 +21,9 @@ import java.util.UUID;
 @EntityListeners(AuditingEntityListener.class)
 public class SurveyCampaign extends BaseEntity {
     @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
-    private UUID id;
+    @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "survey_campaigns_id_seq")
+    @SequenceGenerator(name = "survey_campaigns_id_seq", sequenceName = "survey_campaigns_id_seq", allocationSize = 1)
+    private Long id;
 
     @Column(nullable = false, unique = true, length = 50)
     private String code;

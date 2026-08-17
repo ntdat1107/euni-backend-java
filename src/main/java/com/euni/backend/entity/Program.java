@@ -3,10 +3,6 @@ package com.euni.backend.entity;
 import com.euni.backend.entity.enums.ProgramStatus;
 import jakarta.persistence.*;
 import lombok.*;
-import org.hibernate.annotations.SQLDelete;
-import org.hibernate.annotations.SQLRestriction;
-
-import java.util.UUID;
 
 @Entity
 @Table(name = "programs")
@@ -17,8 +13,9 @@ import java.util.UUID;
 @Builder
 public class Program extends BaseEntity {
     @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
-    private UUID id;
+    @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "programs_id_seq")
+    @SequenceGenerator(name = "programs_id_seq", sequenceName = "programs_id_seq", allocationSize = 1)
+    private Long id;
 
     @Column(nullable = false)
     private String name;
@@ -34,6 +31,7 @@ public class Program extends BaseEntity {
 
     @Enumerated(EnumType.STRING)
     @Column(length = 20)
+    @Builder.Default
     private ProgramStatus status = ProgramStatus.DRAFT;
 
     @Column(name = "general_objective", columnDefinition = "TEXT")
@@ -49,5 +47,6 @@ public class Program extends BaseEntity {
     private String data; // Synced metadata (PEO/PLO/PI JSON)
 
     @Column(name = "current_revision")
+    @Builder.Default
     private Integer currentRevision = 1;
 }

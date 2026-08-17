@@ -3,10 +3,6 @@ package com.euni.backend.entity;
 import com.euni.backend.entity.enums.WorkflowStatus;
 import jakarta.persistence.*;
 import lombok.*;
-import org.hibernate.annotations.SQLDelete;
-import org.hibernate.annotations.SQLRestriction;
-
-import java.util.UUID;
 
 @Entity
 @Table(name = "workflow_templates")
@@ -17,8 +13,9 @@ import java.util.UUID;
 @Builder
 public class WorkflowTemplate extends BaseEntity {
     @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
-    private UUID id;
+    @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "workflow_templates_id_seq")
+    @SequenceGenerator(name = "workflow_templates_id_seq", sequenceName = "workflow_templates_id_seq", allocationSize = 1)
+    private Long id;
 
     @Column(nullable = false, length = 100)
     private String code;

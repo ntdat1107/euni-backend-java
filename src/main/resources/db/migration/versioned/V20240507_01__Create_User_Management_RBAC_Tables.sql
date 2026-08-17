@@ -2,10 +2,6 @@
 -- Author: Antigravity (AI Engineering Assistant)
 -- Purpose: Schema for Departments, Users, Roles, and Permissions.
 
--- Extension for UUID generation
-CREATE EXTENSION IF NOT EXISTS "pgcrypto";
-
-
 DROP TABLE IF EXISTS role_permissions CASCADE;
 DROP TABLE IF EXISTS user_roles CASCADE;
 DROP TABLE IF EXISTS roles CASCADE;
@@ -13,9 +9,19 @@ DROP TABLE IF EXISTS permissions CASCADE;
 DROP TABLE IF EXISTS users CASCADE;
 DROP TABLE IF EXISTS faculties CASCADE;
 
+DROP SEQUENCE IF EXISTS faculties_id_seq CASCADE;
+DROP SEQUENCE IF EXISTS roles_id_seq CASCADE;
+DROP SEQUENCE IF EXISTS permissions_id_seq CASCADE;
+DROP SEQUENCE IF EXISTS users_id_seq CASCADE;
+
+CREATE SEQUENCE faculties_id_seq START WITH 1 INCREMENT BY 1;
+CREATE SEQUENCE roles_id_seq START WITH 1 INCREMENT BY 1;
+CREATE SEQUENCE permissions_id_seq START WITH 1 INCREMENT BY 1;
+CREATE SEQUENCE users_id_seq START WITH 1 INCREMENT BY 1;
+
 -- 1. Faculties Table
 CREATE TABLE faculties (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    id BIGINT DEFAULT nextval('faculties_id_seq') PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
     code VARCHAR(50) UNIQUE NOT NULL,
     description TEXT,
@@ -25,7 +31,7 @@ CREATE TABLE faculties (
 
 -- 2. Roles Table
 CREATE TABLE roles (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    id BIGINT DEFAULT nextval('roles_id_seq') PRIMARY KEY,
     name VARCHAR(100) NOT NULL,
     code VARCHAR(50) UNIQUE NOT NULL,
     description TEXT,
@@ -35,7 +41,7 @@ CREATE TABLE roles (
 
 -- 3. Permissions Table
 CREATE TABLE permissions (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    id BIGINT DEFAULT nextval('permissions_id_seq') PRIMARY KEY,
     name VARCHAR(100) NOT NULL,
     code VARCHAR(50) UNIQUE NOT NULL,
     description TEXT,
@@ -45,13 +51,13 @@ CREATE TABLE permissions (
 
 -- 4. Users Table
 CREATE TABLE users (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    id BIGINT DEFAULT nextval('users_id_seq') PRIMARY KEY,
     username VARCHAR(50) UNIQUE NOT NULL,
     email VARCHAR(100) UNIQUE NOT NULL,
     full_name VARCHAR(100) NOT NULL,
     password_hash VARCHAR(255),
     employee_id VARCHAR(50) UNIQUE,
-    faculty_id UUID REFERENCES faculties(id) ON DELETE SET NULL,
+    faculty_id BIGINT REFERENCES faculties(id) ON DELETE SET NULL,
     phone VARCHAR(20),
     status VARCHAR(20) DEFAULT 'Inactive',
     created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
@@ -61,15 +67,15 @@ CREATE TABLE users (
 
 -- 5. Role-Permissions Mapping
 CREATE TABLE role_permissions (
-    role_id UUID REFERENCES roles(id) ON DELETE CASCADE,
-    permission_id UUID REFERENCES permissions(id) ON DELETE CASCADE,
+    role_id BIGINT REFERENCES roles(id) ON DELETE CASCADE,
+    permission_id BIGINT REFERENCES permissions(id) ON DELETE CASCADE,
     PRIMARY KEY (role_id, permission_id)
 );
 
 -- 6. User-Roles Mapping
 CREATE TABLE user_roles (
-    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
-    role_id UUID REFERENCES roles(id) ON DELETE CASCADE,
+    user_id BIGINT REFERENCES users(id) ON DELETE CASCADE,
+    role_id BIGINT REFERENCES roles(id) ON DELETE CASCADE,
     PRIMARY KEY (user_id, role_id)
 );
 

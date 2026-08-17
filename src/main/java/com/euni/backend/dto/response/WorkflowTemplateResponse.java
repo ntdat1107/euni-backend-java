@@ -5,12 +5,11 @@ import lombok.Builder;
 import lombok.Data;
 
 import java.time.ZonedDateTime;
-import java.util.UUID;
 
 @Data
 @Builder
 public class WorkflowTemplateResponse {
-    private UUID id;
+    private Long id;
     private String code;
     private String name;
     private String description;

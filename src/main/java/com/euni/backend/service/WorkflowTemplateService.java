@@ -5,6 +5,7 @@ import com.euni.backend.dto.response.WorkflowDraftResponse;
 import com.euni.backend.dto.response.WorkflowTemplateResponse;
 import com.euni.backend.entity.WorkflowTemplate;
 import com.euni.backend.entity.WorkflowTemplateDraft;
+import com.euni.backend.entity.enums.WorkflowStatus;
 import com.euni.backend.repository.WorkflowTemplateDraftRepository;
 import com.euni.backend.repository.WorkflowTemplateRepository;
 import lombok.RequiredArgsConstructor;
@@ -13,10 +14,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Optional;
-import java.util.UUID;
 import java.util.stream.Collectors;
-import com.euni.backend.entity.enums.WorkflowStatus;
-import com.euni.backend.repository.WorkflowTemplateDraftRepository;
 
 @Service
 @RequiredArgsConstructor
@@ -42,7 +40,7 @@ public class WorkflowTemplateService {
         return responses;
     }
 
-    public WorkflowTemplateResponse getTemplateById(UUID id) {
+    public WorkflowTemplateResponse getTemplateById(Long id) {
         Optional<WorkflowTemplate> templateOpt = templateRepository.findByIdIncludingDeleted(id);
         if (templateOpt.isPresent()) {
             WorkflowTemplate template = templateOpt.get();
@@ -58,7 +56,7 @@ public class WorkflowTemplateService {
                 .orElseThrow(() -> new RuntimeException("Template not found"));
     }
 
-    public List<WorkflowTemplateResponse> getHistoryByTemplateId(UUID id) {
+    public List<WorkflowTemplateResponse> getHistoryByTemplateId(Long id) {
         String code = null;
         
         // Try finding in official templates
@@ -150,7 +148,7 @@ public class WorkflowTemplateService {
                 .map(this::mapToDraftResponse);
     }
 
-    public boolean checkCodeExists(String code, UUID currentId) {
+    public boolean checkCodeExists(String code, Long currentId) {
         return templateRepository.findFirstByCodeAndDeletedFalseOrderByVersionDesc(code)
                 .map(t -> !t.getId().equals(currentId))
                 .orElse(false);
@@ -162,7 +160,7 @@ public class WorkflowTemplateService {
     }
 
     @Transactional
-    public WorkflowTemplateResponse updateStatus(UUID id, WorkflowStatus status) {
+    public WorkflowTemplateResponse updateStatus(Long id, WorkflowStatus status) {
         WorkflowTemplate template = templateRepository.findActiveById(id)
                 .orElseThrow(() -> new RuntimeException("Template not found"));
         

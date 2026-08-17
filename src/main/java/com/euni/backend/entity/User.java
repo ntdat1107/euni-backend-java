@@ -5,7 +5,6 @@ import lombok.*;
 
 import java.util.HashSet;
 import java.util.Set;
-import java.util.UUID;
 
 @Entity
 @Table(name = "users")
@@ -16,8 +15,9 @@ import java.util.UUID;
 @Builder
 public class User extends BaseEntity {
     @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
-    private UUID id;
+    @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "users_id_seq")
+    @SequenceGenerator(name = "users_id_seq", sequenceName = "users_id_seq", allocationSize = 1)
+    private Long id;
 
     @Column(unique = true, nullable = false, length = 50)
     private String username;

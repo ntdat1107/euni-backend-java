@@ -7,8 +7,6 @@ import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Map;
-import java.util.UUID;
 
 @Data
 @NoArgsConstructor
@@ -17,8 +15,8 @@ public class SurveyCampaignRequest {
     private String code;
     private String name;
     private String description;
-    private UUID programId;
-    private UUID workflowTemplateId;
+    private Long programId;
+    private Long workflowTemplateId;
     private LocalDateTime startDate;
     private LocalDateTime endDate;
     private SurveyCampaignStatus status;
@@ -31,7 +29,7 @@ public class SurveyCampaignRequest {
         private Integer stepIndex;
         private String stepName;
         private LocalDateTime deadline;
-        private List<String> requiredDocuments;
-        private Map<String, Object> configuration;
+        private Object requiredDocuments;
+        private Object configuration;
     }
 }

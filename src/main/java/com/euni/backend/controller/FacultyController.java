@@ -8,7 +8,6 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
-import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/faculties")
@@ -29,12 +28,12 @@ public class FacultyController extends BaseController {
     }
 
     @PutMapping("/{id}")
-    public ResponseEntity<ApiResponse<FacultyDto>> updateFaculty(@PathVariable UUID id, @RequestBody FacultyDto dto) {
+    public ResponseEntity<ApiResponse<FacultyDto>> updateFaculty(@PathVariable Long id, @RequestBody FacultyDto dto) {
         return ok(facultyService.updateFaculty(id, dto));
     }
 
     @DeleteMapping("/{id}")
-    public ResponseEntity<ApiResponse<Void>> deleteFaculty(@PathVariable UUID id) {
+    public ResponseEntity<ApiResponse<Void>> deleteFaculty(@PathVariable Long id) {
         facultyService.deleteFaculty(id);
         return ok(null);
     }

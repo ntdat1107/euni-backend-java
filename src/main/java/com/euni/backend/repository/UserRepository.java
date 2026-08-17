@@ -9,10 +9,9 @@ import org.springframework.stereotype.Repository;
 
 import java.util.List;
 import java.util.Optional;
-import java.util.UUID;
 
 @Repository
-public interface UserRepository extends JpaRepository<User, UUID> {
+public interface UserRepository extends JpaRepository<User, Long> {
     @EntityGraph(attributePaths = {"faculty", "roles", "roles.permissions"})
     @Query("SELECT u FROM User u WHERE u.deleted = false")
     List<User> findAllActive();
@@ -30,5 +29,8 @@ public interface UserRepository extends JpaRepository<User, UUID> {
     boolean existsByEmail(@Param("email") String email);
 
     @Query("SELECT u FROM User u WHERE u.id = :id AND u.deleted = false")
-    Optional<User> findActiveById(@Param("id") UUID id);
+    Optional<User> findActiveById(@Param("id") Long id);
+
+    @Query("SELECT u FROM User u WHERE (u.username = :username OR u.email = :email OR (u.employeeId IS NOT NULL AND u.employeeId = :employeeId)) AND u.deleted = false")
+    Optional<User> findByUsernameOrEmailOrEmployeeId(@Param("username") String username, @Param("email") String email, @Param("employeeId") String employeeId);
 }

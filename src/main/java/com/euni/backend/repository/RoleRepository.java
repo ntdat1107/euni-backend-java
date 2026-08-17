@@ -9,10 +9,9 @@ import org.springframework.stereotype.Repository;
 
 import java.util.List;
 import java.util.Optional;
-import java.util.UUID;
 
 @Repository
-public interface RoleRepository extends JpaRepository<Role, UUID> {
+public interface RoleRepository extends JpaRepository<Role, Long> {
     @EntityGraph(attributePaths = {"permissions"})
     @Query("SELECT r FROM Role r WHERE r.deleted = false")
     List<Role> findAllActive();
@@ -21,5 +20,5 @@ public interface RoleRepository extends JpaRepository<Role, UUID> {
     Optional<Role> findByCode(@Param("code") String code);
 
     @Query("SELECT r FROM Role r WHERE r.id = :id AND r.deleted = false")
-    Optional<Role> findActiveById(@Param("id") UUID id);
+    Optional<Role> findActiveById(@Param("id") Long id);
 }

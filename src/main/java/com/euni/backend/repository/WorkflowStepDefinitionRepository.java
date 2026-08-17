@@ -7,10 +7,9 @@ import org.springframework.stereotype.Repository;
 
 import java.util.List;
 import java.util.Optional;
-import java.util.UUID;
 
 @Repository
-public interface WorkflowStepDefinitionRepository extends JpaRepository<WorkflowStepDefinition, UUID> {
+public interface WorkflowStepDefinitionRepository extends JpaRepository<WorkflowStepDefinition, Long> {
     
     @Query("SELECT w FROM WorkflowStepDefinition w WHERE w.deleted = false")
     List<WorkflowStepDefinition> findAllActive();

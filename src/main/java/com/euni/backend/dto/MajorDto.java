@@ -6,18 +6,17 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.time.ZonedDateTime;
-import java.util.UUID;
 
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
 public class MajorDto {
-    private UUID id;
+    private Long id;
     private String name;
     private String code;
     private String description;
-    private UUID facultyId;
+    private Long facultyId;
     private String facultyName;
     private int programCount;
     private ZonedDateTime createdAt;

@@ -9,10 +9,9 @@ import org.springframework.stereotype.Repository;
 
 import java.util.List;
 import java.util.Optional;
-import java.util.UUID;
 
 @Repository
-public interface ProgramRepository extends JpaRepository<Program, UUID> {
+public interface ProgramRepository extends JpaRepository<Program, Long> {
     @EntityGraph(attributePaths = {"major"})
     @Query("SELECT p FROM Program p WHERE p.deleted = false")
     List<Program> findAllActive();
@@ -21,5 +20,8 @@ public interface ProgramRepository extends JpaRepository<Program, UUID> {
     boolean existsByCode(@Param("code") String code);
 
     @Query("SELECT p FROM Program p WHERE p.id = :id AND p.deleted = false")
-    Optional<Program> findActiveById(@Param("id") UUID id);
+    Optional<Program> findActiveById(@Param("id") Long id);
+
+    @Query("SELECT p FROM Program p WHERE p.code = :code AND p.deleted = false")
+    Optional<Program> findByCode(@Param("code") String code);
 }

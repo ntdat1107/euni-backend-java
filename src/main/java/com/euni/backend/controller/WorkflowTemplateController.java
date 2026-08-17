@@ -12,7 +12,6 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 import java.util.Map;
-import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/workflow-templates")
@@ -29,17 +28,17 @@ public class WorkflowTemplateController extends BaseController {
     @GetMapping("/check-code")
     public ResponseEntity<ApiResponse<Boolean>> checkCode(
             @RequestParam String code,
-            @RequestParam(required = false) UUID currentId) {
+            @RequestParam(required = false) Long currentId) {
         return ok(templateService.checkCodeExists(code, currentId));
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<ApiResponse<WorkflowTemplateResponse>> getById(@PathVariable UUID id) {
+    public ResponseEntity<ApiResponse<WorkflowTemplateResponse>> getById(@PathVariable Long id) {
         return ok(templateService.getTemplateById(id));
     }
 
     @GetMapping("/{id}/history")
-    public ResponseEntity<ApiResponse<List<WorkflowTemplateResponse>>> getHistory(@PathVariable UUID id) {
+    public ResponseEntity<ApiResponse<List<WorkflowTemplateResponse>>> getHistory(@PathVariable Long id) {
         return ok(templateService.getHistoryByTemplateId(id));
     }
 
@@ -69,7 +68,7 @@ public class WorkflowTemplateController extends BaseController {
 
     @PatchMapping("/{id}/status")
     public ResponseEntity<ApiResponse<WorkflowTemplateResponse>> updateStatus(
-            @PathVariable UUID id,
+            @PathVariable Long id,
             @RequestBody Map<String, String> body) {
         WorkflowStatus status = WorkflowStatus.valueOf(body.get("status").toUpperCase());
         return ok(templateService.updateStatus(id, status));
