@@ -1,7 +1,6 @@
 package com.euni.backend.controller;
 
 import com.euni.backend.dto.request.SurveyCampaignRequest;
-
 import com.euni.backend.dto.SurveyCampaignDto;
 import com.euni.backend.dto.SurveyCampaignStepDto;
 import com.euni.backend.dto.response.ApiResponse;
@@ -12,7 +11,6 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 import java.util.Map;
-import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/survey/campaigns")
@@ -28,7 +26,7 @@ public class SurveyCampaignController extends BaseController {
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<ApiResponse<SurveyCampaignDto>> getById(@PathVariable UUID id) {
+    public ResponseEntity<ApiResponse<SurveyCampaignDto>> getById(@PathVariable Long id) {
         return ok(campaignService.getById(id));
     }
 
@@ -38,18 +36,18 @@ public class SurveyCampaignController extends BaseController {
     }
 
     @PutMapping("/{id}")
-    public ResponseEntity<ApiResponse<SurveyCampaignDto>> update(@PathVariable UUID id, @RequestBody SurveyCampaignRequest request) {
+    public ResponseEntity<ApiResponse<SurveyCampaignDto>> update(@PathVariable Long id, @RequestBody SurveyCampaignRequest request) {
         return ok("Cập nhật đợt khảo sát thành công", campaignService.update(id, request));
     }
 
     @DeleteMapping("/{id}")
-    public ResponseEntity<ApiResponse<Void>> delete(@PathVariable UUID id) {
+    public ResponseEntity<ApiResponse<Void>> delete(@PathVariable Long id) {
         campaignService.delete(id);
         return ok("Đã hủy đợt khảo sát thành công", null);
     }
 
     @PostMapping("/{id}/cancel")
-    public ResponseEntity<ApiResponse<SurveyCampaignDto>> cancel(@PathVariable UUID id) {
+    public ResponseEntity<ApiResponse<SurveyCampaignDto>> cancel(@PathVariable Long id) {
         // TODO: RBAC Permission Check (PERM_SURVEY_CAMPAIGN_CANCEL)
         return ok("Đã hủy đợt khảo sát thành công", campaignService.cancelCampaign(id));
     }
@@ -61,8 +59,8 @@ public class SurveyCampaignController extends BaseController {
 
     @PostMapping("/{id}/steps/{stepId}/save")
     public ResponseEntity<ApiResponse<SurveyCampaignStepDto>> saveStepData(
-            @PathVariable UUID id,
-            @PathVariable UUID stepId,
+            @PathVariable Long id,
+            @PathVariable Long stepId,
             @RequestBody Map<String, Object> data) {
         String resultData = data.get("resultData") != null ? data.get("resultData").toString() : "{}";
         return ok(campaignService.saveStepData(id, stepId, resultData));
@@ -70,23 +68,22 @@ public class SurveyCampaignController extends BaseController {
 
     @GetMapping("/{id}/courses/{courseId}")
     public ResponseEntity<ApiResponse<com.euni.backend.dto.SurveyCampaignCourseDetailDto>> getCampaignCourseDetail(
-            @PathVariable UUID id,
-            @PathVariable UUID courseId) {
+            @PathVariable Long id,
+            @PathVariable Long courseId) {
         return ok(campaignService.getCampaignCourseDetail(id, courseId));
     }
 
     @PostMapping("/{id}/courses/{courseId}/save")
     public ResponseEntity<ApiResponse<com.euni.backend.dto.SurveyCampaignCourseDetailDto>> saveCampaignCourseDetail(
-            @PathVariable UUID id,
-            @PathVariable UUID courseId,
+            @PathVariable Long id,
+            @PathVariable Long courseId,
             @RequestBody Map<String, Object> data) {
         return ok("Lưu đề cương học phần thành công", campaignService.saveCampaignCourseDetail(id, courseId, data));
     }
 
     @PostMapping("/{id}/approve")
-    public ResponseEntity<ApiResponse<Void>> approveCampaign(@PathVariable UUID id) {
+    public ResponseEntity<ApiResponse<Void>> approveCampaign(@PathVariable Long id) {
         campaignService.approveCampaign(id);
         return ok("Phê duyệt đợt khảo sát và đồng bộ dữ liệu thành công", null);
     }
 }
-

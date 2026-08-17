@@ -52,21 +52,27 @@ public class DatabaseSeeder implements CommandLineRunner {
         Permission viewerPerm = seedPermission("Người xem", "VIEWER", "Chỉ có quyền xem thông tin");
         Permission adminPerm = seedPermission("Toàn quyền hệ thống", "ADMIN_ALL", "Có tất cả các quyền quản trị");
 
-        // 3. Seed Roles
-        Role adminRole = seedRole("Quản trị viên", "ADMIN", new HashSet<>(Set.of(adminPerm, makerPerm, approverPerm, viewerPerm)));
-        Role managerRole = seedRole("Trưởng Khoa / Trưởng Bộ môn", "MANAGER", new HashSet<>(Set.of(makerPerm, approverPerm, viewerPerm)));
-        Role lecturerRole = seedRole("Giảng viên Biên soạn", "LECTURER", new HashSet<>(Set.of(makerPerm, viewerPerm)));
-        Role reviewerRole = seedRole("Hội đồng Thẩm định", "REVIEWER", new HashSet<>(Set.of(approverPerm, viewerPerm)));
+        // 3. Seed Roles (8 Roles chuẩn)
+        Role adminRole = seedRole("Quản trị hệ thống", "ADMIN", new HashSet<>(Set.of(adminPerm, makerPerm, approverPerm, viewerPerm)));
+        Role dtdhRole = seedRole("Chuyên viên ĐTĐH", "DTDH", new HashSet<>(Set.of(makerPerm, approverPerm, viewerPerm)));
+        Role deanRole = seedRole("Trưởng Khoa", "DEAN", new HashSet<>(Set.of(approverPerm, makerPerm, viewerPerm)));
+        Role headDeptRole = seedRole("Trưởng Bộ môn", "HEAD_DEPT", new HashSet<>(Set.of(approverPerm, makerPerm, viewerPerm)));
+        Role lecturerRole = seedRole("Giảng viên", "LECTURER", new HashSet<>(Set.of(makerPerm, viewerPerm)));
+        Role committeeRole = seedRole("Tổ soạn thảo", "COMMITTEE", new HashSet<>(Set.of(makerPerm, viewerPerm)));
+        Role councilRole = seedRole("Hội đồng thẩm định", "COUNCIL", new HashSet<>(Set.of(approverPerm, viewerPerm)));
+        Role qaRole = seedRole("Chuyên viên ĐBCL", "QA", new HashSet<>(Set.of(makerPerm, viewerPerm)));
 
         // 4. Seed Users
         seedUser("admin", "admin@euni.edu.vn", "Quản trị viên Hệ thống", "admin123", "ADM-001", "Active", fitFaculty, new HashSet<>(Set.of(adminRole)), 1L);
-        seedUser("truongkhoa_cntt", "truongkhoa@euni.edu.vn", "PGS.TS. Trần Văn Trưởng", "password", "TK-001", "Active", fitFaculty, new HashSet<>(Set.of(managerRole)), 0L);
+        seedUser("cv_dtdh", "dtdh@euni.edu.vn", "Chuyên viên Phòng ĐTĐH", "password", "ĐT-001", "Active", fitFaculty, new HashSet<>(Set.of(dtdhRole)), 0L);
+        seedUser("truongkhoa_cntt", "truongkhoa@euni.edu.vn", "PGS.TS. Trần Văn Trưởng", "password", "TK-001", "Active", fitFaculty, new HashSet<>(Set.of(deanRole)), 0L);
+        seedUser("truongbomon_se", "truongbomon.se@euni.edu.vn", "TS. Nguyễn Văn Bộ", "password", "BM-001", "Active", seFaculty, new HashSet<>(Set.of(headDeptRole)), 0L);
         seedUser("lecturer_nguyen", "nguyen.va@euni.edu.vn", "ThS. Nguyễn Văn A", "password", "GV-001", "Active", seFaculty, new HashSet<>(Set.of(lecturerRole)), 0L);
-        seedUser("lecturer_tran", "tran.tb@euni.edu.vn", "TS. Trần Thị B", "password", "GV-002", "Active", isFaculty, new HashSet<>(Set.of(lecturerRole)), 0L);
-        seedUser("lecturer_le", "le.vc@euni.edu.vn", "PGS.TS. Lê Văn C", "password", "GV-003", "Active", csFaculty, new HashSet<>(Set.of(reviewerRole, lecturerRole)), 0L);
-        seedUser("reviewer_pham", "pham.vd@euni.edu.vn", "TS. Phạm Văn D", "password", "HD-001", "Active", fitFaculty, new HashSet<>(Set.of(reviewerRole)), 0L);
+        seedUser("lecturer_tran", "tran.tb@euni.edu.vn", "TS. Trần Thị B", "password", "GV-002", "Active", isFaculty, new HashSet<>(Set.of(lecturerRole, committeeRole)), 0L);
+        seedUser("hoidong_pham", "pham.vd@euni.edu.vn", "TS. Phạm Văn D", "password", "HD-001", "Active", fitFaculty, new HashSet<>(Set.of(councilRole)), 0L);
+        seedUser("cv_dbcl", "dbcl@euni.edu.vn", "Chuyên viên ĐBCL", "password", "CL-001", "Active", fitFaculty, new HashSet<>(Set.of(qaRole)), 0L);
 
-        log.info("Base database seeding completed successfully.");
+        log.info("Base database seeding completed successfully with 8 roles.");
     }
 
     private Faculty seedFaculty(String name, String code) {

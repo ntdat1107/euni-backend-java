@@ -8,7 +8,6 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
-import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/majors")
@@ -29,12 +28,12 @@ public class MajorController extends BaseController {
     }
 
     @PutMapping("/{id}")
-    public ResponseEntity<ApiResponse<MajorDto>> updateMajor(@PathVariable UUID id, @RequestBody MajorDto dto) {
+    public ResponseEntity<ApiResponse<MajorDto>> updateMajor(@PathVariable Long id, @RequestBody MajorDto dto) {
         return ok(majorService.updateMajor(id, dto));
     }
 
     @DeleteMapping("/{id}")
-    public ResponseEntity<ApiResponse<Void>> deleteMajor(@PathVariable UUID id) {
+    public ResponseEntity<ApiResponse<Void>> deleteMajor(@PathVariable Long id) {
         majorService.deleteMajor(id);
         return ok(null);
     }

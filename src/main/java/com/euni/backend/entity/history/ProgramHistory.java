@@ -5,7 +5,6 @@ import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
 
 import java.time.ZonedDateTime;
-import java.util.UUID;
 
 @Entity
 @Table(name = "program_history")
@@ -16,11 +15,12 @@ import java.util.UUID;
 @Builder
 public class ProgramHistory {
     @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
-    private UUID id;
+    @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "program_history_id_seq")
+    @SequenceGenerator(name = "program_history_id_seq", sequenceName = "program_history_id_seq", allocationSize = 1)
+    private Long id;
 
     @Column(name = "program_id", nullable = false)
-    private UUID programId;
+    private Long programId;
 
     private String name;
     private String code;
@@ -43,7 +43,7 @@ public class ProgramHistory {
     private ZonedDateTime changedAt;
 
     @Column(name = "changed_by")
-    private UUID changedBy;
+    private Long changedBy;
 
     @Column(name = "change_reason")
     private String changeReason;

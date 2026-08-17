@@ -3,8 +3,14 @@
 DROP TABLE IF EXISTS workflow_template_drafts CASCADE;
 DROP TABLE IF EXISTS workflow_templates CASCADE;
 
+DROP SEQUENCE IF EXISTS workflow_templates_id_seq CASCADE;
+DROP SEQUENCE IF EXISTS workflow_template_drafts_id_seq CASCADE;
+
+CREATE SEQUENCE workflow_templates_id_seq START WITH 1 INCREMENT BY 1;
+CREATE SEQUENCE workflow_template_drafts_id_seq START WITH 1 INCREMENT BY 1;
+
 CREATE TABLE workflow_templates (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    id BIGINT DEFAULT nextval('workflow_templates_id_seq') PRIMARY KEY,
     code VARCHAR(100) NOT NULL,
     name VARCHAR(255) NOT NULL,
     description TEXT,
@@ -17,8 +23,8 @@ CREATE TABLE workflow_templates (
 );
 
 CREATE TABLE workflow_template_drafts (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    template_id UUID,
+    id BIGINT DEFAULT nextval('workflow_template_drafts_id_seq') PRIMARY KEY,
+    template_id BIGINT,
     name VARCHAR(255),
     description TEXT,
     code VARCHAR(100),

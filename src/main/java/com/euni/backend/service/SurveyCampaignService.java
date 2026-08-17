@@ -21,7 +21,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.UUID;
 import java.util.stream.Collectors;
 
 @Service
@@ -37,6 +36,8 @@ public class SurveyCampaignService {
     private final CourseRepository courseRepository;
     private final ObjectMapper objectMapper;
     private final SurveyCampaignCourseRepository surveyCampaignCourseRepository;
+    private final ProgramService programService;
+    private final WorkflowTemplateService workflowTemplateService;
 
     @Transactional(readOnly = true)
     public List<SurveyCampaignDto> getAll() {
@@ -46,7 +47,7 @@ public class SurveyCampaignService {
     }
 
     @Transactional(readOnly = true)
-    public SurveyCampaignDto getById(UUID id) {
+    public SurveyCampaignDto getById(Long id) {
         SurveyCampaign campaign = campaignRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("SurveyCampaign", "id", id));
         return convertToDto(campaign);
@@ -155,7 +156,7 @@ public class SurveyCampaignService {
     }
 
     @Transactional
-    public SurveyCampaignDto update(UUID id, SurveyCampaignRequest request) {
+    public SurveyCampaignDto update(Long id, SurveyCampaignRequest request) {
         SurveyCampaign campaign = campaignRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("SurveyCampaign", "id", id));
 
@@ -217,7 +218,7 @@ public class SurveyCampaignService {
     }
 
     @Transactional
-    public SurveyCampaignDto cancelCampaign(UUID id) {
+    public SurveyCampaignDto cancelCampaign(Long id) {
         // TODO: RBAC Permission Check (PERM_SURVEY_CAMPAIGN_CANCEL)
         SurveyCampaign campaign = campaignRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("SurveyCampaign", "id", id));
@@ -232,7 +233,7 @@ public class SurveyCampaignService {
     }
 
     @Transactional
-    public void delete(UUID id) {
+    public void delete(Long id) {
         cancelCampaign(id);
     }
 
@@ -242,7 +243,7 @@ public class SurveyCampaignService {
     }
 
     @Transactional
-    public SurveyCampaignStepDto saveStepData(UUID campaignId, UUID stepId, String resultData) {
+    public SurveyCampaignStepDto saveStepData(Long campaignId, Long stepId, String resultData) {
         SurveyCampaignStep step = stepRepository.findById(stepId)
                 .orElseThrow(() -> new ResourceNotFoundException("SurveyCampaignStep", "id", stepId));
 
@@ -303,7 +304,7 @@ public class SurveyCampaignService {
     }
 
     @Transactional
-    public void approveCampaign(UUID id) {
+    public void approveCampaign(Long id) {
         SurveyCampaign campaign = campaignRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("SurveyCampaign", "id", id));
 
@@ -327,7 +328,7 @@ public class SurveyCampaignService {
                     handleS2Sync(campaign.getProgram(), step.getResultData());
                     break;
                 case "S5_CLO":
-                    handleS5Sync(campaign.getProgram(), step.getResultData());
+                    handleS5Sync(campaign.getId(), campaign.getProgram(), step.getResultData());
                     break;
                 default:
                     log.debug("No sync logic for screen: {}", screenCode);
@@ -343,24 +344,53 @@ public class SurveyCampaignService {
         log.info("Synced S2_PLO data for program: {}", program.getName());
     }
 
-    private void handleS5Sync(Program program, String resultData) {
-        if (resultData == null || resultData.isEmpty()) return;
-
+    private void handleS5Sync(Long campaignId, Program program, String resultData) {
         try {
-            String courseCode = extractCourseCode(resultData); 
-            if (courseCode != null) {
-                Course course = courseRepository.findByCode(courseCode)
-                        .orElseThrow(() -> new ResourceNotFoundException("Course", "code", courseCode));
-                
-                ProgramCourse programCourse = programCourseRepository.findByProgramIdAndCourseId(program.getId(), course.getId())
-                        .orElseThrow(() -> new ResourceNotFoundException("ProgramCourse", "ids", "program:" + program.getId() + ", course:" + course.getId()));
+            // First, sync courses stored in survey_campaign_courses table
+            List<SurveyCampaignCourse> sccList = surveyCampaignCourseRepository.findByCampaignId(campaignId);
+            if (sccList != null && !sccList.isEmpty()) {
+                for (SurveyCampaignCourse scc : sccList) {
+                    if (scc.getSyllabusData() != null && !scc.getSyllabusData().isEmpty()) {
+                        Optional<ProgramCourse> pcOpt = programCourseRepository.findByProgramIdAndCourseId(program.getId(), scc.getCourse().getId());
+                        if (pcOpt.isPresent()) {
+                            ProgramCourse pc = pcOpt.get();
+                            pc.setData(scc.getSyllabusData());
+                            programCourseRepository.save(pc);
+                            log.info("Synced S5_CLO syllabus data for course: {} in program: {}", scc.getCourse().getCode(), program.getName());
+                        }
+                    }
+                }
+            }
 
-                programCourse.setData(resultData);
-                programCourseRepository.save(programCourse);
-                log.info("Synced S5_CLO data for course: {} in program: {}", courseCode, program.getName());
+            // Second, fallback to parse resultData map if provided
+            if (resultData != null && !resultData.isEmpty()) {
+                try {
+                    JsonNode node = objectMapper.readTree(resultData);
+                    if (node.isObject()) {
+                        node.fields().forEachRemaining(entry -> {
+                            try {
+                                JsonNode courseDataNode = entry.getValue();
+                                String courseCode = courseDataNode.has("courseCode") ? courseDataNode.get("courseCode").asText() : null;
+                                if (courseCode != null) {
+                                    courseRepository.findByCode(courseCode).ifPresent(course -> {
+                                        programCourseRepository.findByProgramIdAndCourseId(program.getId(), course.getId()).ifPresent(pc -> {
+                                            pc.setData(courseDataNode.toString());
+                                            programCourseRepository.save(pc);
+                                            log.info("Synced S5_CLO resultData for course: {} in program: {}", courseCode, program.getName());
+                                        });
+                                    });
+                                }
+                            } catch (Exception ex) {
+                                log.error("Error processing course entry in S5 sync: {}", ex.getMessage());
+                            }
+                        });
+                    }
+                } catch (Exception e) {
+                    log.error("Error parsing S5 resultData map: {}", e.getMessage());
+                }
             }
         } catch (Exception e) {
-            log.error("Error syncing S5 data: {}", e.getMessage());
+            log.error("Error in handleS5Sync: {}", e.getMessage());
         }
     }
 
@@ -373,19 +403,6 @@ public class SurveyCampaignService {
             return null;
         }
     }
-
-    private String extractCourseCode(String result) {
-        try {
-            if (result == null || result.isEmpty()) return null;
-            return objectMapper.readTree(result).get("courseCode").asText();
-        } catch (Exception e) {
-            log.error("Error extracting courseCode: {}", e.getMessage());
-            return null;
-        }
-    }
-
-    private final ProgramService programService;
-    private final WorkflowTemplateService workflowTemplateService;
 
     private SurveyCampaignDto convertToDto(SurveyCampaign entity) {
         List<SurveyCampaignCourse> courseEntities = surveyCampaignCourseRepository.findByCampaignId(entity.getId());
@@ -424,7 +441,7 @@ public class SurveyCampaignService {
     }
 
     @Transactional(readOnly = true)
-    public com.euni.backend.dto.SurveyCampaignCourseDetailDto getCampaignCourseDetail(UUID campaignId, UUID courseId) {
+    public com.euni.backend.dto.SurveyCampaignCourseDetailDto getCampaignCourseDetail(Long campaignId, Long courseId) {
         SurveyCampaignCourse scc = surveyCampaignCourseRepository.findByCampaignIdAndCourseId(campaignId, courseId)
                 .orElseThrow(() -> new ResourceNotFoundException("SurveyCampaignCourse", "campaignId/courseId", campaignId + "/" + courseId));
 
@@ -445,7 +462,7 @@ public class SurveyCampaignService {
     }
 
     @Transactional
-    public com.euni.backend.dto.SurveyCampaignCourseDetailDto saveCampaignCourseDetail(UUID campaignId, UUID courseId, Map<String, Object> data) {
+    public com.euni.backend.dto.SurveyCampaignCourseDetailDto saveCampaignCourseDetail(Long campaignId, Long courseId, Map<String, Object> data) {
         SurveyCampaignCourse scc = surveyCampaignCourseRepository.findByCampaignIdAndCourseId(campaignId, courseId)
                 .orElseThrow(() -> new ResourceNotFoundException("SurveyCampaignCourse", "campaignId/courseId", campaignId + "/" + courseId));
 
@@ -489,4 +506,3 @@ public class SurveyCampaignService {
                 .build();
     }
 }
-

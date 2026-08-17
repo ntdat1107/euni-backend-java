@@ -2,14 +2,10 @@ package com.euni.backend.entity;
 
 import jakarta.persistence.*;
 import lombok.*;
-import org.hibernate.annotations.SQLDelete;
-
-import java.util.UUID;
+import org.hibernate.annotations.GeneratedColumn;
 
 @Entity
-@Table(name = "program_courses", uniqueConstraints = {
-    @UniqueConstraint(columnNames = {"program_id", "course_id"})
-})
+@Table(name = "program_courses")
 @Getter
 @Setter
 @NoArgsConstructor
@@ -17,8 +13,9 @@ import java.util.UUID;
 @Builder
 public class ProgramCourse extends BaseEntity {
     @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
-    private UUID id;
+    @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "program_courses_id_seq")
+    @SequenceGenerator(name = "program_courses_id_seq", sequenceName = "program_courses_id_seq", allocationSize = 1)
+    private Long id;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "program_id", nullable = false)
@@ -31,6 +28,7 @@ public class ProgramCourse extends BaseEntity {
     private Integer semester;
 
     @Column(name = "is_required")
+    @Builder.Default
     private Boolean required = true;
 
     @Column(name = "data", columnDefinition = "TEXT")

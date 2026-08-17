@@ -8,10 +8,9 @@ import org.springframework.stereotype.Repository;
 
 import java.util.List;
 import java.util.Optional;
-import java.util.UUID;
 
 @Repository
-public interface PermissionRepository extends JpaRepository<Permission, UUID> {
+public interface PermissionRepository extends JpaRepository<Permission, Long> {
     @Query("SELECT p FROM Permission p WHERE p.deleted = false")
     List<Permission> findAllActive();
 
@@ -19,5 +18,5 @@ public interface PermissionRepository extends JpaRepository<Permission, UUID> {
     Optional<Permission> findByCode(@Param("code") String code);
 
     @Query("SELECT p FROM Permission p WHERE p.id = :id AND p.deleted = false")
-    Optional<Permission> findActiveById(@Param("id") UUID id);
+    Optional<Permission> findActiveById(@Param("id") Long id);
 }

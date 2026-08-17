@@ -5,7 +5,6 @@ import lombok.*;
 import java.time.LocalDateTime;
 import java.time.ZonedDateTime;
 import java.util.List;
-import java.util.UUID;
 
 @Getter
 @Setter
@@ -13,14 +12,14 @@ import java.util.UUID;
 @AllArgsConstructor
 @Builder
 public class SurveyCampaignDto {
-    private UUID id;
+    private Long id;
     private String code;
     private String name;
     private String description;
-    private UUID programId;
+    private Long programId;
     private String programName;
     private ProgramDto program;
-    private UUID workflowTemplateId;
+    private Long workflowTemplateId;
     private String workflowTemplateName;
     private WorkflowTemplateResponse workflowTemplate;
     private LocalDateTime startDate;
@@ -33,4 +32,3 @@ public class SurveyCampaignDto {
     private String createdBy;
     private String updatedBy;
 }
-

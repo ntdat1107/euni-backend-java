@@ -10,30 +10,28 @@ import org.springframework.stereotype.Repository;
 
 import java.util.List;
 import java.util.Optional;
-import java.util.UUID;
 
 @Repository
-public interface ProgramCourseRepository extends JpaRepository<ProgramCourse, UUID> {
+public interface ProgramCourseRepository extends JpaRepository<ProgramCourse, Long> {
     @EntityGraph(attributePaths = {"course"})
     @Query("SELECT pc FROM ProgramCourse pc WHERE pc.program.id = :programId AND pc.deleted = false")
-    List<ProgramCourse> findAllByProgramId(@Param("programId") UUID programId);
+    List<ProgramCourse> findAllByProgramId(@Param("programId") Long programId);
 
     @Query("SELECT pc FROM ProgramCourse pc WHERE pc.program.id = :programId AND pc.course.id = :courseId AND pc.deleted = false")
-    Optional<ProgramCourse> findByProgramIdAndCourseId(@Param("programId") UUID programId, @Param("courseId") UUID courseId);
-
+    Optional<ProgramCourse> findByProgramIdAndCourseId(@Param("programId") Long programId, @Param("courseId") Long courseId);
 
     @Query(value = "SELECT * FROM program_courses WHERE program_id = :programId AND course_id = :courseId", nativeQuery = true)
-    Optional<ProgramCourse> findByProgramIdAndCourseIdIncludingDeleted(UUID programId, UUID courseId);
+    Optional<ProgramCourse> findByProgramIdAndCourseIdIncludingDeleted(Long programId, Long courseId);
 
     @Modifying
     @Query("UPDATE ProgramCourse pc SET pc.deleted = true WHERE pc.program.id = :programId")
-    void softDeleteByProgramId(UUID programId);
+    void softDeleteByProgramId(Long programId);
 
     @Modifying
     @Query(value = "UPDATE program_courses SET is_deleted = false WHERE program_id = :programId AND course_id = :courseId", nativeQuery = true)
-    void restoreByProgramIdAndCourseId(UUID programId, UUID courseId);
+    void restoreByProgramIdAndCourseId(Long programId, Long courseId);
 
     @Modifying
     @Query("UPDATE ProgramCourse pc SET pc.deleted = true WHERE pc.program.id = :programId")
-    void deleteByProgramId(UUID programId);
+    void deleteByProgramId(Long programId);
 }

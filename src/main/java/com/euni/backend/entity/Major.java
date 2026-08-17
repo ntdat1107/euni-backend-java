@@ -3,10 +3,6 @@ package com.euni.backend.entity;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.BatchSize;
-import org.hibernate.annotations.SQLDelete;
-import org.hibernate.annotations.SQLRestriction;
-
-import java.util.UUID;
 
 @Entity
 @Table(name = "majors")
@@ -17,8 +13,9 @@ import java.util.UUID;
 @Builder
 public class Major extends BaseEntity {
     @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
-    private UUID id;
+    @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "majors_id_seq")
+    @SequenceGenerator(name = "majors_id_seq", sequenceName = "majors_id_seq", allocationSize = 1)
+    private Long id;
 
     @Column(nullable = false)
     private String name;

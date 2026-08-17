@@ -12,7 +12,6 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 import java.util.Map;
-import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/rbac")
@@ -36,7 +35,7 @@ public class RbacController extends BaseController {
 
     @DeleteMapping("/roles/{id}")
     @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<Void> deleteRole(@PathVariable UUID id) {
+    public ResponseEntity<Void> deleteRole(@PathVariable Long id) {
         roleService.deleteRole(id);
         return ResponseEntity.noContent().build();
     }
@@ -44,8 +43,8 @@ public class RbacController extends BaseController {
     @PutMapping("/roles/{id}/permissions")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<RoleDto>> updateRolePermissions(
-            @PathVariable UUID id, 
-            @RequestBody Map<String, List<UUID>> request) {
+            @PathVariable Long id, 
+            @RequestBody Map<String, List<Long>> request) {
         return ok(roleService.updateRolePermissions(id, request.get("permissionIds")));
     }
 
@@ -62,7 +61,7 @@ public class RbacController extends BaseController {
 
     @DeleteMapping("/permissions/{id}")
     @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<Void> deletePermission(@PathVariable UUID id) {
+    public ResponseEntity<Void> deletePermission(@PathVariable Long id) {
         permissionService.deletePermission(id);
         return ResponseEntity.noContent().build();
     }

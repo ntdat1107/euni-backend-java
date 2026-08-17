@@ -3,7 +3,6 @@ package com.euni.backend.dto;
 import lombok.*;
 
 import java.util.List;
-import java.util.UUID;
 
 @Getter
 @Setter
@@ -11,7 +10,7 @@ import java.util.UUID;
 @AllArgsConstructor
 @Builder
 public class RoleDto {
-    private UUID id;
+    private Long id;
     private String name;
     private String code;
     private String description;

@@ -8,10 +8,9 @@ import org.springframework.stereotype.Repository;
 
 import java.util.List;
 import java.util.Optional;
-import java.util.UUID;
 
 @Repository
-public interface CourseRepository extends JpaRepository<Course, UUID> {
+public interface CourseRepository extends JpaRepository<Course, Long> {
     @Query("SELECT c FROM Course c WHERE c.deleted = false")
     List<Course> findAllActive();
 
@@ -19,7 +18,7 @@ public interface CourseRepository extends JpaRepository<Course, UUID> {
     boolean existsByCode(@Param("code") String code);
 
     @Query("SELECT c FROM Course c WHERE c.id = :id AND c.deleted = false")
-    Optional<Course> findActiveById(@Param("id") UUID id);
+    Optional<Course> findActiveById(@Param("id") Long id);
 
     Optional<Course> findByCode(String code);
 }

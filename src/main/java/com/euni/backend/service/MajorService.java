@@ -10,7 +10,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
-import java.util.UUID;
 import java.util.stream.Collectors;
 
 @Service
@@ -50,7 +49,7 @@ public class MajorService {
     }
 
     @Transactional
-    public MajorDto updateMajor(UUID id, MajorDto dto) {
+    public MajorDto updateMajor(Long id, MajorDto dto) {
         Major major = majorRepository.findActiveById(id)
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy ngành học"));
         
@@ -73,7 +72,7 @@ public class MajorService {
     }
 
     @Transactional
-    public void deleteMajor(UUID id) {
+    public void deleteMajor(Long id) {
         Major major = majorRepository.findActiveById(id)
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy ngành học"));
         major.setDeleted(true);

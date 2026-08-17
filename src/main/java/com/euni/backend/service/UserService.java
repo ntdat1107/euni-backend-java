@@ -2,7 +2,6 @@ package com.euni.backend.service;
 
 import com.euni.backend.dto.UserDto;
 import com.euni.backend.entity.User;
-import com.euni.backend.entity.Faculty;
 import com.euni.backend.repository.FacultyRepository;
 import com.euni.backend.entity.Role;
 import com.euni.backend.mapper.UserMapper;
@@ -15,7 +14,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
-import java.util.UUID;
 import java.util.stream.Collectors;
 
 @Service
@@ -36,7 +34,7 @@ public class UserService {
     }
 
     @Transactional(readOnly = true)
-    public UserDto getUserById(UUID id) {
+    public UserDto getUserById(Long id) {
         User user = userRepository.findActiveById(id)
                 .orElseThrow(() -> new RuntimeException("User not found"));
         return userMapper.toDto(user);
@@ -50,7 +48,7 @@ public class UserService {
     }
 
     @Transactional
-    public void deleteUser(UUID id) {
+    public void deleteUser(Long id) {
         User user = userRepository.findActiveById(id)
                 .orElseThrow(() -> new RuntimeException("User not found"));
         user.setDeleted(true);
@@ -58,7 +56,7 @@ public class UserService {
     }
 
     @Transactional
-    public void updateUserStatus(UUID id, String status) {
+    public void updateUserStatus(Long id, String status) {
         User user = userRepository.findActiveById(id)
                 .orElseThrow(() -> new RuntimeException("User not found"));
         user.setStatus(status);
@@ -95,7 +93,7 @@ public class UserService {
     }
 
     @Transactional
-    public UserDto updateUser(UUID id, UserDto userDto) {
+    public UserDto updateUser(Long id, UserDto userDto) {
         User user = userRepository.findActiveById(id)
                 .orElseThrow(() -> new RuntimeException("User not found"));
         
@@ -130,7 +128,7 @@ public class UserService {
     }
 
     @Transactional
-    public java.util.Map<String, String> resetPassword(UUID id) {
+    public java.util.Map<String, String> resetPassword(Long id) {
         User user = userRepository.findActiveById(id)
                 .orElseThrow(() -> new RuntimeException("User not found"));
         

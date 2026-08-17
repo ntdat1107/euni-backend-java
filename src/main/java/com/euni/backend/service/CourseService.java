@@ -8,7 +8,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
-import java.util.UUID;
 import java.util.stream.Collectors;
 
 @Service
@@ -41,7 +40,7 @@ public class CourseService {
     }
 
     @Transactional
-    public CourseDto updateCourse(UUID id, CourseDto dto) {
+    public CourseDto updateCourse(Long id, CourseDto dto) {
         Course course = courseRepository.findActiveById(id)
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy học phần"));
         
@@ -58,7 +57,7 @@ public class CourseService {
     }
 
     @Transactional
-    public void deleteCourse(UUID id) {
+    public void deleteCourse(Long id) {
         Course course = courseRepository.findActiveById(id)
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy học phần"));
         course.setDeleted(true);

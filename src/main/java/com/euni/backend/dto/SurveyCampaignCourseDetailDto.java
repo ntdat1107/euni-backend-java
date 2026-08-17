@@ -2,7 +2,6 @@ package com.euni.backend.dto;
 
 import lombok.*;
 import java.time.ZonedDateTime;
-import java.util.UUID;
 
 @Getter
 @Setter
@@ -10,9 +9,9 @@ import java.util.UUID;
 @AllArgsConstructor
 @Builder
 public class SurveyCampaignCourseDetailDto {
-    private UUID id;
-    private UUID campaignId;
-    private UUID courseId;
+    private Long id;
+    private Long campaignId;
+    private Long courseId;
     private String courseCode;
     private String courseName;
     private Integer credits;
