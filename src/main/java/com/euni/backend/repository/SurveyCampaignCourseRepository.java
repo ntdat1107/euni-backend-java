@@ -18,5 +18,13 @@ public interface SurveyCampaignCourseRepository extends JpaRepository<SurveyCamp
     @Query("SELECT scc FROM SurveyCampaignCourse scc JOIN FETCH scc.course WHERE scc.campaign.id = :campaignId AND scc.course.id = :courseId AND scc.deleted = false")
     Optional<SurveyCampaignCourse> findByCampaignIdAndCourseId(@Param("campaignId") Long campaignId, @Param("courseId") Long courseId);
 
+    @Query("SELECT scc FROM SurveyCampaignCourse scc JOIN FETCH scc.course WHERE scc.campaign.id = :campaignId AND scc.step.id = :stepId AND scc.course.id = :courseId AND scc.deleted = false")
+    Optional<SurveyCampaignCourse> findByCampaignIdAndStepIdAndCourseId(@Param("campaignId") Long campaignId, @Param("stepId") Long stepId, @Param("courseId") Long courseId);
+
+    @Query("SELECT scc FROM SurveyCampaignCourse scc JOIN FETCH scc.course WHERE scc.campaign.id = :campaignId AND scc.step.id = :stepId AND scc.deleted = false")
+    List<SurveyCampaignCourse> findByCampaignIdAndStepId(@Param("campaignId") Long campaignId, @Param("stepId") Long stepId);
+
     boolean existsByCampaignIdAndCourseId(Long campaignId, Long courseId);
+
+    boolean existsByCampaignIdAndStepIdAndCourseId(Long campaignId, Long stepId, Long courseId);
 }

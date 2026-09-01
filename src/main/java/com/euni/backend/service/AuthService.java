@@ -42,7 +42,8 @@ public class AuthService {
                 .map(GrantedAuthority::getAuthority)
                 .collect(Collectors.toList());
                 
-        User user = userRepository.findByUsername(userDetails.getUsername()).orElseThrow();
+        User user = userRepository.findByUsernameOrEmail(loginRequest.getUsername(), loginRequest.getUsername())
+                .orElseThrow(() -> new RuntimeException("User not found"));
 
         // 1. Generate access token with tokenVersion
         String jwt = jwtUtils.generateTokenFromUsernameAndVersion(user.getUsername(), user.getTokenVersion());

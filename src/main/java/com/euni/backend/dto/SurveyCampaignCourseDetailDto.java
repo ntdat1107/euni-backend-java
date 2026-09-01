@@ -11,6 +11,7 @@ import java.time.ZonedDateTime;
 public class SurveyCampaignCourseDetailDto {
     private Long id;
     private Long campaignId;
+    private Long stepId;
     private Long courseId;
     private String courseCode;
     private String courseName;

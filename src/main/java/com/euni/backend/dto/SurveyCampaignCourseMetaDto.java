@@ -9,6 +9,7 @@ import lombok.*;
 @Builder
 public class SurveyCampaignCourseMetaDto {
     private Long id; // survey_campaign_course id
+    private Long stepId;
     private Long courseId;
     private String courseCode;
     private String courseName;

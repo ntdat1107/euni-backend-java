@@ -129,22 +129,25 @@ public class WorkflowStepSeeder implements CommandLineRunner {
                   ],
                   "nodes": [
                     { "id": "node-start", "type": "start", "position": { "x": 50, "y": 150 }, "data": { "label": "Bắt đầu" } },
-                    { "id": "step_1", "type": "state", "position": { "x": 300, "y": 150 }, "data": { "label": "Khảo sát nhu cầu", "orderNo": 1, "screenCode": "S1_KHAO_SAT_NHU_CAU", "performerRole": "DEAN", "approverRole": "DEAN", "prerequisiteStepCodes": [] } },
-                    { "id": "step_2", "type": "state", "position": { "x": 700, "y": 150 }, "data": { "label": "Xây dựng mục tiêu & chuẩn đầu ra (PLO)", "orderNo": 2, "screenCode": "S2_PLO", "performerRole": "HEAD_DEPT", "approverRole": "DEAN", "prerequisiteStepCodes": [] } },
-                    { "id": "step_3", "type": "state", "position": { "x": 1100, "y": 150 }, "data": { "label": "Xác định cấu trúc, khối lượng kiến thức", "orderNo": 3, "screenCode": "S3_XacDinhCauTruc_KhoiLuongKienThuc", "performerRole": "COMMITTEE", "approverRole": "DEAN", "prerequisiteStepCodes": ["S2_PLO"] } },
-                    { "id": "step_4", "type": "state", "position": { "x": 1500, "y": 150 }, "data": { "label": "Đối chiếu, so sánh chương trình đào tạo", "orderNo": 4, "screenCode": "S4_DoiChieuSoSanh", "performerRole": "COMMITTEE", "approverRole": "DEAN", "prerequisiteStepCodes": ["S2_PLO"] } },
-                    { "id": "step_5", "type": "state", "position": { "x": 1900, "y": 150 }, "data": { "label": "Xây dựng đề cương học phần (CLO)", "orderNo": 5, "screenCode": "S5_CLO", "performerRole": "LECTURER", "approverRole": "DEAN", "prerequisiteStepCodes": ["S2_PLO"] } },
-                    { "id": "step_6", "type": "state", "position": { "x": 2300, "y": 150 }, "data": { "label": "Xây dựng ma trận phát triển kiến thức, kỹ năng", "orderNo": 6, "screenCode": "S6_MATRIX", "performerRole": "COMMITTEE", "approverRole": "DEAN", "prerequisiteStepCodes": ["S5_CLO"] } },
-                    { "id": "node-end", "type": "end", "position": { "x": 2700, "y": 150 }, "data": { "label": "Kết thúc" } }
+                    { "id": "step_1", "type": "state", "position": { "x": 300, "y": 40 }, "data": { "label": "Khảo sát nhu cầu", "orderNo": 1, "screenCode": "S1_KHAO_SAT_NHU_CAU", "performerRole": "DEAN", "performerRoles": ["DEAN", "HEAD_DEPT"], "approverRole": "DEAN", "approverRoles": ["DEAN"], "prerequisiteStepCodes": [] } },
+                    { "id": "step_2", "type": "state", "position": { "x": 300, "y": 260 }, "data": { "label": "Xây dựng mục tiêu & chuẩn đầu ra (PLO)", "orderNo": 2, "screenCode": "S2_PLO", "performerRole": "HEAD_DEPT", "performerRoles": ["HEAD_DEPT", "COMMITTEE"], "approverRole": "DEAN", "approverRoles": ["DEAN"], "prerequisiteStepCodes": [] } },
+                    { "id": "step_3", "type": "state", "position": { "x": 680, "y": -70 }, "data": { "label": "Xác định cấu trúc, khối lượng kiến thức", "orderNo": 3, "screenCode": "S3_XacDinhCauTruc_KhoiLuongKienThuc", "performerRole": "COMMITTEE", "performerRoles": ["COMMITTEE"], "approverRole": "DEAN", "approverRoles": ["DEAN", "HEAD_DEPT"], "prerequisiteStepCodes": ["S2_PLO"] } },
+                    { "id": "step_4", "type": "state", "position": { "x": 680, "y": 150 }, "data": { "label": "Đối chiếu, so sánh chương trình đào tạo", "orderNo": 4, "screenCode": "S4_DoiChieuSoSanh", "performerRole": "COMMITTEE", "performerRoles": ["COMMITTEE"], "approverRole": "DEAN", "approverRoles": ["DEAN"], "prerequisiteStepCodes": ["S2_PLO"] } },
+                    { "id": "step_5", "type": "state", "position": { "x": 680, "y": 370 }, "data": { "label": "Xây dựng đề cương học phần (CLO)", "orderNo": 5, "screenCode": "S5_CLO", "performerRole": "LECTURER", "performerRoles": ["LECTURER", "HEAD_DEPT", "COMMITTEE"], "approverRole": "DEAN", "approverRoles": ["DEAN", "HEAD_DEPT"], "prerequisiteStepCodes": ["S2_PLO"] } },
+                    { "id": "step_6", "type": "state", "position": { "x": 1060, "y": 150 }, "data": { "label": "Xây dựng ma trận phát triển kiến thức, kỹ năng", "orderNo": 6, "screenCode": "S6_MATRIX", "performerRole": "COMMITTEE", "performerRoles": ["COMMITTEE"], "approverRole": "DEAN", "approverRoles": ["DEAN"], "prerequisiteStepCodes": ["S5_CLO"] } },
+                    { "id": "node-end", "type": "end", "position": { "x": 1440, "y": 380 }, "data": { "label": "Kết thúc" } }
                   ],
                   "edges": [
-                    { "id": "edge-start", "source": "node-start", "target": "step_1", "label": "Bắt đầu" },
-                    { "id": "e-1-2", "source": "step_1", "target": "step_2", "label": "Tiếp tục" },
-                    { "id": "e-2-3", "source": "step_2", "target": "step_3", "label": "Tiếp tục" },
-                    { "id": "e-3-4", "source": "step_3", "target": "step_4", "label": "Tiếp tục" },
-                    { "id": "e-4-5", "source": "step_4", "target": "step_5", "label": "Tiếp tục" },
-                    { "id": "e-5-6", "source": "step_5", "target": "step_6", "label": "Tiếp tục" },
-                    { "id": "edge-end", "source": "step_6", "target": "node-end", "label": "Hoàn thành" }
+                    { "id": "edge-start-step_1", "source": "node-start", "target": "step_1" },
+                    { "id": "edge-start-step_2", "source": "node-start", "target": "step_2" },
+                    { "id": "e-step_2-step_3", "source": "step_2", "target": "step_3", "label": "Tiếp tục" },
+                    { "id": "e-step_2-step_4", "source": "step_2", "target": "step_4", "label": "Tiếp tục" },
+                    { "id": "e-step_2-step_5", "source": "step_2", "target": "step_5", "label": "Tiếp tục" },
+                    { "id": "e-step_5-step_6", "source": "step_5", "target": "step_6", "label": "Tiếp tục" },
+                    { "id": "edge-step_1-end", "source": "step_1", "target": "node-end", "label": "Hoàn thành" },
+                    { "id": "edge-step_3-end", "source": "step_3", "target": "node-end", "label": "Hoàn thành" },
+                    { "id": "edge-step_4-end", "source": "step_4", "target": "node-end", "label": "Hoàn thành" },
+                    { "id": "edge-step_6-end", "source": "step_6", "target": "node-end", "label": "Hoàn thành" }
                   ]
                 }""";
     }
@@ -163,12 +166,12 @@ public class WorkflowStepSeeder implements CommandLineRunner {
                     { "id": "fstep_1", "type": "state", "position": { "x": 300, "y": 150 }, "data": { "label": "Rà soát chuẩn đầu ra (PLO)", "orderNo": 1, "screenCode": "S2_PLO", "performerRole": "HEAD_DEPT", "approverRole": "DEAN", "prerequisiteStepCodes": [] } },
                     { "id": "fstep_2", "type": "state", "position": { "x": 700, "y": 150 }, "data": { "label": "Cập nhật Đề cương học phần (CLO)", "orderNo": 2, "screenCode": "S5_CLO", "performerRole": "LECTURER", "approverRole": "DEAN", "prerequisiteStepCodes": ["S2_PLO"] } },
                     { "id": "fstep_3", "type": "state", "position": { "x": 1100, "y": 150 }, "data": { "label": "Cập nhật Ma trận tích hợp", "orderNo": 3, "screenCode": "S6_MATRIX", "performerRole": "COMMITTEE", "approverRole": "DEAN", "prerequisiteStepCodes": ["S5_CLO"] } },
-                    { "id": "node-end", "type": "end", "position": { "x": 1500, "y": 150 }, "data": { "label": "Kết thúc" } }
+                    { "id": "node-end", "type": "end", "position": { "x": 1500, "y": 280 }, "data": { "label": "Kết thúc" } }
                   ],
                   "edges": [
-                    { "id": "edge-start", "source": "node-start", "target": "fstep_1", "label": "Bắt đầu" },
+                    { "id": "edge-start", "source": "node-start", "target": "fstep_1" },
                     { "id": "e-f1-f2", "source": "fstep_1", "target": "fstep_2", "label": "Tiếp tục" },
-                    { "id": "e-f2-f3", "source": "fstep_1", "target": "fstep_2", "label": "Tiếp tục" },
+                    { "id": "e-f2-f3", "source": "fstep_2", "target": "fstep_3", "label": "Tiếp tục" },
                     { "id": "edge-end", "source": "fstep_3", "target": "node-end", "label": "Hoàn thành" }
                   ]
                 }""";

@@ -25,6 +25,10 @@ public class SurveyCampaignCourse extends BaseEntity {
     private SurveyCampaign campaign;
 
     @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "step_id")
+    private SurveyCampaignStep step;
+
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "course_id", nullable = false)
     private Course course;
 

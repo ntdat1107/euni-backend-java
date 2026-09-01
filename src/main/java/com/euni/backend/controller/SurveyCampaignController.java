@@ -69,8 +69,9 @@ public class SurveyCampaignController extends BaseController {
     @GetMapping("/{id}/courses/{courseId}")
     public ResponseEntity<ApiResponse<com.euni.backend.dto.SurveyCampaignCourseDetailDto>> getCampaignCourseDetail(
             @PathVariable Long id,
-            @PathVariable Long courseId) {
-        return ok(campaignService.getCampaignCourseDetail(id, courseId));
+            @PathVariable Long courseId,
+            @RequestParam(required = false) Long stepId) {
+        return ok(campaignService.getCampaignCourseDetail(id, courseId, stepId));
     }
 
     @PostMapping("/{id}/courses/{courseId}/save")
