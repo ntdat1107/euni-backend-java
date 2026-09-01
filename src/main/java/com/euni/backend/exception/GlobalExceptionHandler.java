@@ -21,10 +21,16 @@ public class GlobalExceptionHandler {
                 .body(ApiResponse.error("An unexpected error occurred: " + ex.getMessage()));
     }
 
+    @ExceptionHandler(org.springframework.security.core.AuthenticationException.class)
+    public ResponseEntity<ApiResponse<Void>> handleAuthenticationException(org.springframework.security.core.AuthenticationException ex) {
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body(ApiResponse.error("UNAUTHORIZED", ex.getMessage() != null ? ex.getMessage() : "Phiên đăng nhập hết hạn hoặc không hợp lệ."));
+    }
+
     @ExceptionHandler(org.springframework.security.access.AccessDeniedException.class)
     public ResponseEntity<ApiResponse<Void>> handleAccessDeniedException(org.springframework.security.access.AccessDeniedException ex) {
         return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                .body(ApiResponse.error("Bạn không có quyền thực hiện hành động này."));
+                .body(ApiResponse.error("FORBIDDEN", "Bạn không có quyền thực hiện hành động này."));
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)

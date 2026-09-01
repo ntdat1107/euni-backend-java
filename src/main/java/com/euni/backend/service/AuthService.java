@@ -74,10 +74,11 @@ public class AuthService {
             String username = jwtUtils.getUserNameFromJwtToken(requestRefreshToken);
             Long tokenVersion = jwtUtils.getTokenVersionFromJwtToken(requestRefreshToken);
             
-            User user = userRepository.findByUsername(username).orElseThrow(() -> new RuntimeException("User not found"));
+            User user = userRepository.findByUsername(username)
+                .orElseThrow(() -> new org.springframework.security.authentication.BadCredentialsException("Người dùng không tồn tại"));
             
             if (!user.getTokenVersion().equals(tokenVersion)) {
-                throw new RuntimeException("Refresh token was invalidated");
+                throw new org.springframework.security.authentication.BadCredentialsException("Refresh token đã bị thu hồi hoặc hết hạn");
             }
             
             List<String> roles = user.getRoles().stream()
@@ -95,6 +96,6 @@ public class AuthService {
                 .roles(roles)
                 .build();
         }
-        throw new RuntimeException("Refresh token is invalid!");
+        throw new org.springframework.security.authentication.BadCredentialsException("Refresh token không hợp lệ hoặc đã hết hạn!");
     }
 }
