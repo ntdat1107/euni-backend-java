@@ -10,4 +10,6 @@ import lombok.NoArgsConstructor;
 public class AiGenerateRequest {
     private String prompt;
     private String action;
+    private String contentType;
 }
+
