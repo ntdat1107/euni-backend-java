@@ -30,11 +30,16 @@ public class JwtUtils {
     }
 
     public String generateTokenFromUsernameAndVersion(String username, Long tokenVersion) {
+        return generateTokenFromUsernameAndVersion(username, tokenVersion, false);
+    }
+
+    public String generateTokenFromUsernameAndVersion(String username, Long tokenVersion, boolean remember) {
+        long expirationMs = remember ? 86400000L : jwtExpirationMs; // 24 hours if remember, else default (1 hour)
         return Jwts.builder()
                 .setSubject(username)
                 .claim("tokenVersion", tokenVersion)
                 .setIssuedAt(new Date())
-                .setExpiration(new Date((new Date()).getTime() + jwtExpirationMs))
+                .setExpiration(new Date((new Date()).getTime() + expirationMs))
                 .signWith(getSigningKey(), SignatureAlgorithm.HS256)
                 .compact();
     }
@@ -55,6 +60,20 @@ public class JwtUtils {
                 .parseClaimsJws(token)
                 .getBody()
                 .get("tokenVersion", Long.class);
+    }
+
+    public Boolean getRememberFromJwtToken(String token) {
+        try {
+            Claims claims = Jwts.parserBuilder()
+                    .setSigningKey(getSigningKey())
+                    .build()
+                    .parseClaimsJws(token)
+                    .getBody();
+            Boolean remember = claims.get("remember", Boolean.class);
+            return Boolean.TRUE.equals(remember);
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     public boolean validateJwtToken(String authToken) {

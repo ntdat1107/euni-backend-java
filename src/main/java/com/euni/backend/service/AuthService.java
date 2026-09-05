@@ -45,17 +45,21 @@ public class AuthService {
         User user = userRepository.findByUsernameOrEmail(loginRequest.getUsername(), loginRequest.getUsername())
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
-        // 1. Generate access token with tokenVersion
-        String jwt = jwtUtils.generateTokenFromUsernameAndVersion(user.getUsername(), user.getTokenVersion());
+        boolean remember = Boolean.TRUE.equals(loginRequest.getRemember());
 
-        // 2. Refresh token logic (Simple implementation using JWT with longer expiration)
-        // Here we just generate a simple JWT with a longer expiration (e.g. 7 days) and include tokenVersion.
+        // 1. Generate access token with tokenVersion and remember option
+        String jwt = jwtUtils.generateTokenFromUsernameAndVersion(user.getUsername(), user.getTokenVersion(), remember);
+
+        // 2. Refresh token logic (30 days if remember=true, 12 hours if remember=false)
+        long refreshTokenExpirationMs = remember ? 2592000000L : 43200000L;
+
         String refreshToken = Jwts.builder()
                 .setSubject(user.getUsername())
                 .claim("tokenVersion", user.getTokenVersion())
+                .claim("remember", remember)
                 .claim("isRefreshToken", true)
                 .setIssuedAt(new Date())
-                .setExpiration(new Date((new Date()).getTime() + 604800000)) // 7 days
+                .setExpiration(new Date((new Date()).getTime() + refreshTokenExpirationMs))
                 .signWith(hmacShaKeyFor(jwtUtils.getJwtSecret().getBytes(UTF_8)), HS256)
                 .compact();
 
@@ -73,6 +77,7 @@ public class AuthService {
         if (jwtUtils.validateJwtToken(requestRefreshToken)) {
             String username = jwtUtils.getUserNameFromJwtToken(requestRefreshToken);
             Long tokenVersion = jwtUtils.getTokenVersionFromJwtToken(requestRefreshToken);
+            boolean remember = Boolean.TRUE.equals(jwtUtils.getRememberFromJwtToken(requestRefreshToken));
             
             User user = userRepository.findByUsername(username)
                 .orElseThrow(() -> new org.springframework.security.authentication.BadCredentialsException("Người dùng không tồn tại"));
@@ -85,7 +90,7 @@ public class AuthService {
                 .map(role -> "ROLE_" + role.getCode())
                 .collect(Collectors.toList());
 
-            String newJwt = jwtUtils.generateTokenFromUsernameAndVersion(user.getUsername(), user.getTokenVersion());
+            String newJwt = jwtUtils.generateTokenFromUsernameAndVersion(user.getUsername(), user.getTokenVersion(), remember);
 
             return TokenResponse.builder()
                 .accessToken(newJwt)
