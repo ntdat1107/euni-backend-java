@@ -71,3 +71,8 @@ app:
       - image
       - file
     max-field-length: 500
+
+gemini:
+  api-key: ${GEMINI_API_KEY:}
+  model: ${GEMINI_MODEL:gemini-1.5-flash}
+
