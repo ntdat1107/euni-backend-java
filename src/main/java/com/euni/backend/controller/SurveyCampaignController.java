@@ -63,7 +63,8 @@ public class SurveyCampaignController extends BaseController {
             @PathVariable Long stepId,
             @RequestBody Map<String, Object> data) {
         String resultData = data.get("resultData") != null ? data.get("resultData").toString() : "{}";
-        return ok(campaignService.saveStepData(id, stepId, resultData));
+        String status = data.get("status") != null ? data.get("status").toString() : null;
+        return ok(campaignService.saveStepData(id, stepId, resultData, status));
     }
 
     @GetMapping("/{id}/courses/{courseId}")

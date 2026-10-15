@@ -3,6 +3,7 @@ package com.euni.backend.service;
 import com.euni.backend.dto.SurveyCampaignDto;
 import com.euni.backend.dto.SurveyCampaignStepDto;
 import com.euni.backend.entity.*;
+import com.euni.backend.entity.enums.ProgramStatus;
 import com.euni.backend.entity.enums.SurveyCampaignStatus;
 import com.euni.backend.exception.ResourceNotFoundException;
 import com.euni.backend.repository.*;
@@ -35,7 +36,7 @@ public class SurveyCampaignService {
     private final ProgramCourseRepository programCourseRepository;
     private final CourseRepository courseRepository;
     private final ObjectMapper objectMapper;
-    private final SurveyCampaignCourseRepository surveyCampaignCourseRepository;
+    private final SyllabusRepository syllabusRepository;
     private final ProgramService programService;
     private final WorkflowTemplateService workflowTemplateService;
 
@@ -73,6 +74,13 @@ public class SurveyCampaignService {
             throw new IllegalArgumentException(
                     String.format("Chương trình đào tạo '%s' đang có một Đợt khảo sát chưa hoàn thành (Mã: %s - Tên: '%s'). Vui lòng hoàn thành hoặc Hủy đợt khảo sát hiện tại trước khi tạo đợt mới.",
                             program.getName(), activeCamp.getCode(), activeCamp.getName())
+            );
+        }
+
+        if (program.getStatus() != ProgramStatus.DRAFT) {
+            throw new IllegalArgumentException(
+                    String.format("Chỉ được tạo đợt cho Chương trình đào tạo ở trạng thái Bản nháp (DRAFT). Chương trình '%s' hiện đang ở trạng thái '%s'.",
+                            program.getName(), program.getStatus())
             );
         }
 
@@ -136,21 +144,26 @@ public class SurveyCampaignService {
 
         SurveyCampaign saved = campaignRepository.save(campaign);
 
-        // If campaign workflow contains Step 5 (S5_CLO), initialize survey_campaign_courses for all program courses
+        // Cập nhật trạng thái Chương trình Đào tạo sang REVIEWING (Đang xây dựng/rà soát)
+        program.setStatus(ProgramStatus.REVIEWING);
+        programRepository.save(program);
+
+        // If campaign workflow contains Step 5 (S5_CLO), ensure syllabuses exist for all program courses
         for (SurveyCampaignStep step : saved.getSteps()) {
             String screenCode = extractScreenCode(step.getConfiguration());
             if ("S5_CLO".equals(screenCode)) {
                 List<ProgramCourse> programCourses = programCourseRepository.findAllByProgramId(program.getId());
                 for (ProgramCourse pc : programCourses) {
-                    if (!surveyCampaignCourseRepository.existsByCampaignIdAndStepIdAndCourseId(saved.getId(), step.getId(), pc.getCourse().getId())) {
-                        SurveyCampaignCourse scc = SurveyCampaignCourse.builder()
-                                .campaign(saved)
-                                .step(step)
-                                .course(pc.getCourse())
+                    if (syllabusRepository.findByProgramCourseIdAndDeletedFalse(pc.getId()).isEmpty()) {
+                        Syllabus s = Syllabus.builder()
+                                .programCourse(pc)
+                                .version("1.0")
                                 .status("DRAFT")
-                                .syllabusData("{}")
+                                .teachingMethods("Thuyết giảng kết hợp thảo luận nhóm và thực hành.")
+                                .studentDuties("Tham gia học tập đầy đủ, hoàn thành đồ án môn học.")
+                                .isMaster(true)
                                 .build();
-                        surveyCampaignCourseRepository.save(scc);
+                        syllabusRepository.save(s);
                     }
                 }
             }
@@ -232,6 +245,10 @@ public class SurveyCampaignService {
         }
 
         campaign.setStatus(SurveyCampaignStatus.CANCELLED);
+        if (campaign.getProgram() != null && campaign.getProgram().getStatus() == ProgramStatus.REVIEWING) {
+            campaign.getProgram().setStatus(ProgramStatus.DRAFT);
+            programRepository.save(campaign.getProgram());
+        }
         SurveyCampaign saved = campaignRepository.save(campaign);
         return convertToDto(saved);
     }
@@ -248,6 +265,11 @@ public class SurveyCampaignService {
 
     @Transactional
     public SurveyCampaignStepDto saveStepData(Long campaignId, Long stepId, String resultData) {
+        return saveStepData(campaignId, stepId, resultData, "COMPLETED");
+    }
+
+    @Transactional
+    public SurveyCampaignStepDto saveStepData(Long campaignId, Long stepId, String resultData, String status) {
         SurveyCampaignStep step = stepRepository.findById(stepId)
                 .orElseThrow(() -> new ResourceNotFoundException("SurveyCampaignStep", "id", stepId));
 
@@ -301,7 +323,11 @@ public class SurveyCampaignService {
             step.setResultData(resultData);
         }
 
-        step.setStatus("COMPLETED");
+        if (status != null && !status.isBlank()) {
+            step.setStatus(status.toUpperCase());
+        } else {
+            step.setStatus("COMPLETED");
+        }
         SurveyCampaignStep saved = stepRepository.save(step);
 
         return convertToStepDto(saved);
@@ -313,6 +339,10 @@ public class SurveyCampaignService {
                 .orElseThrow(() -> new ResourceNotFoundException("SurveyCampaign", "id", id));
 
         campaign.setStatus(SurveyCampaignStatus.APPROVED);
+        if (campaign.getProgram() != null) {
+            campaign.getProgram().setStatus(ProgramStatus.ACTIVE);
+            programRepository.save(campaign.getProgram());
+        }
         campaignRepository.save(campaign);
 
         // Trigger Sync-Back
@@ -342,60 +372,11 @@ public class SurveyCampaignService {
 
     private void handleS2Sync(Program program, String resultData) {
         if (resultData == null || resultData.isEmpty()) return;
-        
-        program.setData(resultData);
-        programRepository.save(program);
-        log.info("Synced S2_PLO data for program: {}", program.getName());
+        log.info("Handled S2_PLO direct workflow event for program: {}", program.getName());
     }
 
     private void handleS5Sync(Long campaignId, Program program, String resultData) {
-        try {
-            // First, sync courses stored in survey_campaign_courses table
-            List<SurveyCampaignCourse> sccList = surveyCampaignCourseRepository.findByCampaignId(campaignId);
-            if (sccList != null && !sccList.isEmpty()) {
-                for (SurveyCampaignCourse scc : sccList) {
-                    if (scc.getSyllabusData() != null && !scc.getSyllabusData().isEmpty()) {
-                        Optional<ProgramCourse> pcOpt = programCourseRepository.findByProgramIdAndCourseId(program.getId(), scc.getCourse().getId());
-                        if (pcOpt.isPresent()) {
-                            ProgramCourse pc = pcOpt.get();
-                            pc.setData(scc.getSyllabusData());
-                            programCourseRepository.save(pc);
-                            log.info("Synced S5_CLO syllabus data for course: {} in program: {}", scc.getCourse().getCode(), program.getName());
-                        }
-                    }
-                }
-            }
-
-            // Second, fallback to parse resultData map if provided
-            if (resultData != null && !resultData.isEmpty()) {
-                try {
-                    JsonNode node = objectMapper.readTree(resultData);
-                    if (node.isObject()) {
-                        node.fields().forEachRemaining(entry -> {
-                            try {
-                                JsonNode courseDataNode = entry.getValue();
-                                String courseCode = courseDataNode.has("courseCode") ? courseDataNode.get("courseCode").asText() : null;
-                                if (courseCode != null) {
-                                    courseRepository.findByCode(courseCode).ifPresent(course -> {
-                                        programCourseRepository.findByProgramIdAndCourseId(program.getId(), course.getId()).ifPresent(pc -> {
-                                            pc.setData(courseDataNode.toString());
-                                            programCourseRepository.save(pc);
-                                            log.info("Synced S5_CLO resultData for course: {} in program: {}", courseCode, program.getName());
-                                        });
-                                    });
-                                }
-                            } catch (Exception ex) {
-                                log.error("Error processing course entry in S5 sync: {}", ex.getMessage());
-                            }
-                        });
-                    }
-                } catch (Exception e) {
-                    log.error("Error parsing S5 resultData map: {}", e.getMessage());
-                }
-            }
-        } catch (Exception e) {
-            log.error("Error in handleS5Sync: {}", e.getMessage());
-        }
+        log.info("Handled S5_CLO direct workflow event for program: {}", program.getName());
     }
 
     private String extractScreenCode(String config) {
@@ -409,17 +390,24 @@ public class SurveyCampaignService {
     }
 
     private SurveyCampaignDto convertToDto(SurveyCampaign entity) {
-        List<SurveyCampaignCourse> courseEntities = surveyCampaignCourseRepository.findByCampaignId(entity.getId());
-        List<com.euni.backend.dto.SurveyCampaignCourseMetaDto> courseMetas = courseEntities.stream()
-                .map(scc -> com.euni.backend.dto.SurveyCampaignCourseMetaDto.builder()
-                        .id(scc.getId())
-                        .stepId(scc.getStep() != null ? scc.getStep().getId() : null)
-                        .courseId(scc.getCourse().getId())
-                        .courseCode(scc.getCourse().getCode())
-                        .courseName(scc.getCourse().getName())
-                        .credits(scc.getCourse().getCredits())
-                        .status(scc.getStatus())
-                        .build())
+        List<ProgramCourse> programCourses = entity.getProgram() != null
+                ? programCourseRepository.findAllByProgramId(entity.getProgram().getId())
+                : List.of();
+
+        List<com.euni.backend.dto.SurveyCampaignCourseMetaDto> courseMetas = programCourses.stream()
+                .map(pc -> {
+                    Optional<Syllabus> sylOpt = syllabusRepository.findFirstByProgramCourseIdAndDeletedFalseOrderByVersionDesc(pc.getId());
+                    String status = sylOpt.map(Syllabus::getStatus).orElse("DRAFT");
+                    return com.euni.backend.dto.SurveyCampaignCourseMetaDto.builder()
+                            .id(pc.getId())
+                            .stepId(null)
+                            .courseId(pc.getCourse().getId())
+                            .courseCode(pc.getCourse().getCode())
+                            .courseName(pc.getCourse().getName())
+                            .credits(pc.getCourse().getCredits())
+                            .status(status)
+                            .build();
+                })
                 .collect(Collectors.toList());
 
         return SurveyCampaignDto.builder()
@@ -447,85 +435,74 @@ public class SurveyCampaignService {
 
     @Transactional(readOnly = true)
     public com.euni.backend.dto.SurveyCampaignCourseDetailDto getCampaignCourseDetail(Long campaignId, Long courseId, Long stepId) {
-        Optional<SurveyCampaignCourse> sccOpt = Optional.empty();
-        if (stepId != null) {
-            sccOpt = surveyCampaignCourseRepository.findByCampaignIdAndStepIdAndCourseId(campaignId, stepId, courseId);
-        }
-        if (sccOpt.isEmpty()) {
-            sccOpt = surveyCampaignCourseRepository.findByCampaignIdAndCourseId(campaignId, courseId);
-        }
+        SurveyCampaign campaign = campaignRepository.findById(campaignId)
+                .orElseThrow(() -> new ResourceNotFoundException("SurveyCampaign", "id", campaignId));
 
-        SurveyCampaignCourse scc = sccOpt
-                .orElseThrow(() -> new ResourceNotFoundException("SurveyCampaignCourse", "campaignId/courseId", campaignId + "/" + courseId));
+        ProgramCourse pc = programCourseRepository.findByProgramIdAndCourseId(campaign.getProgram().getId(), courseId)
+                .orElseThrow(() -> new ResourceNotFoundException("ProgramCourse", "program/course", campaign.getProgram().getId() + "/" + courseId));
+
+        Syllabus syllabus = syllabusRepository.findFirstByProgramCourseIdAndDeletedFalseOrderByVersionDesc(pc.getId())
+                .orElseGet(() -> Syllabus.builder()
+                        .programCourse(pc)
+                        .version("1.0")
+                        .status("DRAFT")
+                        .build());
+
+        String jsonOut = syllabus.getWeeklySchedule() != null ? syllabus.getWeeklySchedule() : "{}";
 
         return com.euni.backend.dto.SurveyCampaignCourseDetailDto.builder()
-                .id(scc.getId())
-                .campaignId(scc.getCampaign().getId())
-                .stepId(scc.getStep() != null ? scc.getStep().getId() : null)
-                .courseId(scc.getCourse().getId())
-                .courseCode(scc.getCourse().getCode())
-                .courseName(scc.getCourse().getName())
-                .credits(scc.getCourse().getCredits())
-                .status(scc.getStatus())
-                .syllabusData(scc.getSyllabusData())
-                .createdAt(scc.getCreatedAt())
-                .updatedAt(scc.getUpdatedAt())
-                .createdBy(scc.getCreatedBy())
-                .updatedBy(scc.getUpdatedBy())
+                .id(pc.getId())
+                .campaignId(campaignId)
+                .stepId(stepId)
+                .courseId(pc.getCourse().getId())
+                .courseCode(pc.getCourse().getCode())
+                .courseName(pc.getCourse().getName())
+                .credits(pc.getCourse().getCredits())
+                .status(syllabus.getStatus())
+                .syllabusData(jsonOut)
+                .createdAt(syllabus.getCreatedAt())
+                .updatedAt(syllabus.getUpdatedAt())
                 .build();
     }
 
     @Transactional
     public com.euni.backend.dto.SurveyCampaignCourseDetailDto saveCampaignCourseDetail(Long campaignId, Long courseId, Map<String, Object> data) {
-        Long stepId = null;
-        if (data.get("stepId") != null) {
-            try {
-                stepId = Long.valueOf(data.get("stepId").toString());
-            } catch (Exception e) {
-                // ignore
-            }
-        }
+        SurveyCampaign campaign = campaignRepository.findById(campaignId)
+                .orElseThrow(() -> new ResourceNotFoundException("SurveyCampaign", "id", campaignId));
 
-        Optional<SurveyCampaignCourse> sccOpt = Optional.empty();
-        if (stepId != null) {
-            sccOpt = surveyCampaignCourseRepository.findByCampaignIdAndStepIdAndCourseId(campaignId, stepId, courseId);
-        }
-        if (sccOpt.isEmpty()) {
-            sccOpt = surveyCampaignCourseRepository.findByCampaignIdAndCourseId(campaignId, courseId);
-        }
+        ProgramCourse pc = programCourseRepository.findByProgramIdAndCourseId(campaign.getProgram().getId(), courseId)
+                .orElseThrow(() -> new ResourceNotFoundException("ProgramCourse", "program/course", campaign.getProgram().getId() + "/" + courseId));
 
-        SurveyCampaignCourse scc = sccOpt
-                .orElseThrow(() -> new ResourceNotFoundException("SurveyCampaignCourse", "campaignId/courseId", campaignId + "/" + courseId));
-
-        if (scc.getStep() == null && stepId != null) {
-            stepRepository.findById(stepId).ifPresent(scc::setStep);
-        }
+        Syllabus syllabus = syllabusRepository.findFirstByProgramCourseIdAndDeletedFalseOrderByVersionDesc(pc.getId())
+                .orElseGet(() -> Syllabus.builder()
+                        .programCourse(pc)
+                        .version("1.0")
+                        .isMaster(true)
+                        .build());
 
         if (data.get("syllabusData") != null) {
-            scc.setSyllabusData(data.get("syllabusData").toString());
+            syllabus.setWeeklySchedule(data.get("syllabusData").toString());
         }
         if (data.get("status") != null) {
-            scc.setStatus(data.get("status").toString());
+            syllabus.setStatus(data.get("status").toString());
         } else {
-            scc.setStatus("COMPLETED");
+            syllabus.setStatus("COMPLETED");
         }
 
-        SurveyCampaignCourse saved = surveyCampaignCourseRepository.save(scc);
+        Syllabus saved = syllabusRepository.save(syllabus);
 
         return com.euni.backend.dto.SurveyCampaignCourseDetailDto.builder()
-                .id(saved.getId())
-                .campaignId(saved.getCampaign().getId())
-                .stepId(saved.getStep() != null ? saved.getStep().getId() : null)
-                .courseId(saved.getCourse().getId())
-                .courseCode(saved.getCourse().getCode())
-                .courseName(saved.getCourse().getName())
-                .credits(saved.getCourse().getCredits())
+                .id(pc.getId())
+                .campaignId(campaignId)
+                .stepId(data.get("stepId") != null ? Long.valueOf(data.get("stepId").toString()) : null)
+                .courseId(pc.getCourse().getId())
+                .courseCode(pc.getCourse().getCode())
+                .courseName(pc.getCourse().getName())
+                .credits(pc.getCourse().getCredits())
                 .status(saved.getStatus())
-                .syllabusData(saved.getSyllabusData())
+                .syllabusData(saved.getWeeklySchedule())
                 .createdAt(saved.getCreatedAt())
                 .updatedAt(saved.getUpdatedAt())
-                .createdBy(saved.getCreatedBy())
-                .updatedBy(saved.getUpdatedBy())
                 .build();
     }
 

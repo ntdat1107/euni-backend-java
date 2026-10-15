@@ -37,7 +37,7 @@ public class WorkflowStepSeeder implements CommandLineRunner {
         String workflowType = "SURVEY_CREATE";
 
         // 1. Seed Master Step Definitions S1 -> S9
-        seedStep(workflowType, "S1_KHAO_SAT_NHU_CAU", "Khảo sát nhu cầu", "UPLOAD", 
+        seedStep(workflowType, "S1_KHAO_SAT_NHU_CAU", "Khảo sát nhu cầu", "FORM", 
                 List.of("Khảo sát", "Tổng hợp kết quả khảo sát"));
         
         seedStep(workflowType, "S2_PLO", "Xây dựng mục tiêu & chuẩn đầu ra (PLO)", "FORM", 

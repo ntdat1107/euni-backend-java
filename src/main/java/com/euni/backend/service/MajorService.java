@@ -1,8 +1,10 @@
 package com.euni.backend.service;
 
 import com.euni.backend.dto.MajorDto;
+import com.euni.backend.entity.Department;
 import com.euni.backend.entity.Faculty;
 import com.euni.backend.entity.Major;
+import com.euni.backend.repository.DepartmentRepository;
 import com.euni.backend.repository.FacultyRepository;
 import com.euni.backend.repository.MajorRepository;
 import lombok.RequiredArgsConstructor;
@@ -18,6 +20,7 @@ public class MajorService {
 
     private final MajorRepository majorRepository;
     private final FacultyRepository facultyRepository;
+    private final DepartmentRepository departmentRepository;
 
     @Transactional(readOnly = true)
     public List<MajorDto> getAllMajors() {
@@ -38,11 +41,18 @@ public class MajorService {
                     .orElseThrow(() -> new RuntimeException("Không tìm thấy khoa"));
         }
 
+        Department department = null;
+        if (dto.getDepartmentId() != null) {
+            department = departmentRepository.findActiveById(dto.getDepartmentId())
+                    .orElseThrow(() -> new RuntimeException("Không tìm thấy bộ môn"));
+        }
+
         Major major = Major.builder()
                 .name(dto.getName())
                 .code(dto.getCode())
                 .description(dto.getDescription())
                 .faculty(faculty)
+                .department(department)
                 .build();
         
         return toDto(majorRepository.save(major));
@@ -63,10 +73,17 @@ public class MajorService {
                     .orElseThrow(() -> new RuntimeException("Không tìm thấy khoa"));
         }
 
+        Department department = null;
+        if (dto.getDepartmentId() != null) {
+            department = departmentRepository.findActiveById(dto.getDepartmentId())
+                    .orElseThrow(() -> new RuntimeException("Không tìm thấy bộ môn"));
+        }
+
         major.setName(dto.getName());
         major.setCode(dto.getCode());
         major.setDescription(dto.getDescription());
         major.setFaculty(faculty);
+        major.setDepartment(department);
         
         return toDto(majorRepository.save(major));
     }
@@ -87,6 +104,8 @@ public class MajorService {
                 .description(major.getDescription())
                 .facultyId(major.getFaculty() != null ? major.getFaculty().getId() : null)
                 .facultyName(major.getFaculty() != null ? major.getFaculty().getName() : null)
+                .departmentId(major.getDepartment() != null ? major.getDepartment().getId() : null)
+                .departmentName(major.getDepartment() != null ? major.getDepartment().getName() : null)
                 .programCount(major.getPrograms() != null ? major.getPrograms().size() : 0)
                 .createdAt(major.getCreatedAt())
                 .updatedAt(major.getUpdatedAt())

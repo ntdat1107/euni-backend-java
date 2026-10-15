@@ -2,5 +2,8 @@ package com.euni.backend.entity.enums;
 
 public enum ProgramStatus {
     DRAFT,
-    ACTIVE
+    REVIEWING,
+    APPROVED,
+    ACTIVE,
+    ARCHIVED
 }

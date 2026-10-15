@@ -2,7 +2,6 @@ package com.euni.backend.entity;
 
 import jakarta.persistence.*;
 import lombok.*;
-import org.hibernate.annotations.GeneratedColumn;
 
 @Entity
 @Table(name = "program_courses")
@@ -25,12 +24,18 @@ public class ProgramCourse extends BaseEntity {
     @JoinColumn(name = "course_id", nullable = false)
     private Course course;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "structure_id")
+    private ProgramStructure structure;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "elective_group_id")
+    private ProgramElectiveGroup electiveGroup;
+
+
     private Integer semester;
 
     @Column(name = "is_required")
     @Builder.Default
     private Boolean required = true;
-
-    @Column(name = "data", columnDefinition = "TEXT")
-    private String data; // Synced metadata (CLO JSON)
 }

@@ -1,8 +1,15 @@
 package com.euni.backend.service;
 
 import com.euni.backend.dto.request.AiGenerateRequest;
+import com.euni.backend.entity.User;
+import com.euni.backend.entity.UserAiCredential;
+import com.euni.backend.entity.UserAiModelConfig;
+import com.euni.backend.entity.enums.AiProvider;
+import com.euni.backend.repository.UserAiCredentialRepository;
+import com.euni.backend.repository.UserRepository;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -19,16 +26,26 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.UUID;
 
 @Slf4j
 @Service
+@RequiredArgsConstructor
 public class GeminiAiService {
 
     @Value("${gemini.api-key:}")
-    private String apiKey;
+    private String systemApiKey;
 
-    @Value("${gemini.model:gemini-2.0-flash}")
-    private String model;
+    @Value("${gemini.model:gemini-2.0-flash-lite}")
+    private String systemModel;
+
+    private final AiPromptResolver promptResolver;
+    private final OpenAiStreamingClient openAiStreamingClient;
+    private final UserRepository userRepository;
+    private final UserAiCredentialRepository credentialRepository;
+    private final UserAiModelConfigService modelConfigService;
+    private final CryptoService cryptoService;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final HttpClient httpClient = HttpClient.newBuilder()
@@ -36,210 +53,159 @@ public class GeminiAiService {
             .build();
 
     private static final List<String> FALLBACK_MODELS = List.of(
-            "gemini-2.0-flash",
-            "gemini-1.5-flash-latest",
-            "gemini-2.5-flash",
-            "gemini-1.5-flash-002"
+            "gemini-2.0-flash-lite", "gemini-2.0-flash", "gemini-1.5-flash", "gemini-1.5-pro"
     );
 
-    private static final String[] MOCK_HTML_PARAGRAPHS = new String[]{
-            "<p><strong>Chuẩn đầu ra (CLO) & Nội dung học phần:</strong> Môn học này trang bị cho người học kiến thức chuyên sâu về phân tích, thiết kế và phát triển phần mềm theo chuẩn chất lượng cao, tuân thủ theo các khung năng lực quốc tế và quy định kiểm định giáo dục hiện hành.</p>",
-            "<p>Sau khi hoàn thành môn học, người học có khả năng:</p>",
-            "<ul>\n  <li><strong>CLO 1:</strong> Phân tích nghiệp vụ phức tạp và chuyển đổi thành mô hình kiến trúc phần mềm (Architecture Patterns & DDD).</li>\n  <li><strong>CLO 2:</strong> Làm chủ các công cụ lập trình hiện đại, quy trình kiểm thử tự động (Automated Testing) và triển khai liên tục (CI/CD).</li>\n  <li><strong>CLO 3:</strong> Đánh giá, tối ưu hóa hiệu năng hệ thống và đảm bảo an toàn bảo mật phần mềm.</li>\n</ul>",
-            "<p><em>Ghi chú: Dữ liệu được tổng hợp & đề xuất tự động bởi Trợ lý AI Assistant (Hệ thống eUni).</em></p>"
-    };
+    public record ResolvedConfig(AiProvider provider, String apiKey, String model, String baseUrl,
+                                  Double temperature, Integer maxTokens) {}
 
     public void streamGenerate(AiGenerateRequest request, SseEmitter emitter) {
-        if (apiKey == null || apiKey.trim().isEmpty()) {
-            log.warn("GEMINI_API_KEY chưa được cấu hình. Sử dụng dữ liệu giả lập (Mock fallback).");
+        streamGenerate(request, emitter, null);
+    }
+
+    public void streamGenerate(AiGenerateRequest request, SseEmitter emitter, String username) {
+        long startTime = System.currentTimeMillis();
+        String traceId = UUID.randomUUID().toString().substring(0, 8);
+        log.info("[AI-TRACE][{}] Yêu cầu AI | Type: {}, User: {}", traceId, request.getContentType(), username);
+
+        ResolvedConfig config = resolveConfig(username, request.getContentType());
+        if (config == null || config.apiKey() == null || config.apiKey().isBlank()) {
+            log.warn("[AI-TRACE][{}] Không tìm thấy API Key (User hoặc System). Dùng mock fallback.", traceId);
             streamMockResponse(emitter);
             return;
         }
 
-        try {
-            String promptText = buildFullPrompt(request);
+        String promptText = promptResolver.buildFullPrompt(request);
 
-            Map<String, Object> textPart = Map.of("text", promptText);
-            Map<String, Object> contentMap = Map.of("role", "user", "parts", List.of(textPart));
-            Map<String, Object> requestBody = Map.of(
-                    "contents", List.of(contentMap),
-                    "generationConfig", Map.of(
-                            "temperature", 0.7,
-                            "maxOutputTokens", 2048
-                    )
-            );
+        if (config.provider() == AiProvider.OPENAI || config.provider() == AiProvider.DEEPSEEK || config.provider() == AiProvider.CUSTOM) {
+            openAiStreamingClient.streamChatCompletion(config.baseUrl(), config.apiKey(), config.model(),
+                    config.temperature(), config.maxTokens(), promptText, emitter, traceId);
+            return;
+        }
 
-            String jsonPayload = objectMapper.writeValueAsString(requestBody);
+        executeGeminiStreaming(config, promptText, emitter, traceId, startTime);
+    }
 
-            String selectedModel = sanitizeModelName(model);
-            HttpResponse<InputStream> response = executeGeminiRequest(selectedModel, jsonPayload);
-
-            // If 404, attempt fallback models automatically
-            if (response != null && response.statusCode() == 404) {
-                log.warn("Model '{}' trả về 404 Not Found. Đang thử tự động chuyển đổi mô hình fallback...", selectedModel);
-                for (String fallback : FALLBACK_MODELS) {
-                    if (fallback.equalsIgnoreCase(selectedModel)) continue;
-                    log.info("Thử kết nối Gemini với model fallback: {}", fallback);
-                    response = executeGeminiRequest(fallback, jsonPayload);
-                    if (response != null && response.statusCode() == 200) {
-                        log.info("Kết nối thành công với Gemini model: {}", fallback);
-                        break;
-                    }
+    private ResolvedConfig resolveConfig(String username, String contentType) {
+        if (username != null && !username.isBlank()) {
+            Optional<User> userOpt = userRepository.findByUsername(username);
+            if (userOpt.isPresent()) {
+                Long userId = userOpt.get().getId();
+                Optional<UserAiModelConfig> modelOpt = modelConfigService.getEffectiveConfig(userId, contentType);
+                if (modelOpt.isPresent() && modelOpt.get().getCredential() != null && modelOpt.get().getCredential().isActive()) {
+                    return toResolvedConfig(modelOpt.get().getCredential(), modelOpt.get().getModelName(),
+                            modelOpt.get().getTemperature(), modelOpt.get().getMaxTokens());
                 }
+                List<UserAiCredential> activeCreds = credentialRepository.findActiveByUserId(userId);
+                if (!activeCreds.isEmpty()) {
+                    return toResolvedConfig(activeCreds.get(0), null, 0.5, 4096);
+                }
+            }
+        }
+        if (systemApiKey != null && !systemApiKey.isBlank()) {
+            return new ResolvedConfig(AiProvider.GEMINI, systemApiKey.trim(), systemModel, null, 0.5, 4096);
+        }
+        return null;
+    }
+
+    private ResolvedConfig toResolvedConfig(UserAiCredential cred, String model, Double temp, Integer maxTokens) {
+        String decryptedKey = cryptoService.decrypt(cred.getEncryptedApiKey(), cred.getEncryptionIv());
+        String effectiveModel = model != null && !model.isBlank() ? model :
+                (cred.getProvider() == AiProvider.GEMINI ? "gemini-2.0-flash-lite" : "gpt-4o-mini");
+        return new ResolvedConfig(cred.getProvider(), decryptedKey, effectiveModel, cred.getBaseUrl(), temp, maxTokens);
+    }
+
+    private void executeGeminiStreaming(ResolvedConfig config, String promptText, SseEmitter emitter, String traceId, long startTime) {
+        try {
+            Map<String, Object> reqBody = Map.of(
+                    "contents", List.of(Map.of("role", "user", "parts", List.of(Map.of("text", promptText)))),
+                    "generationConfig", Map.of("temperature", config.temperature(), "maxOutputTokens", config.maxTokens())
+            );
+            String jsonPayload = objectMapper.writeValueAsString(reqBody);
+            String targetModel = sanitizeModelName(config.model());
+
+            HttpResponse<InputStream> response = executeGeminiRequest(targetModel, jsonPayload, config.apiKey(), traceId);
+            if (response != null && response.statusCode() == 404) {
+                response = retryFallbackModels(targetModel, jsonPayload, config.apiKey(), traceId);
             }
 
             if (response == null || response.statusCode() != 200) {
                 int code = response != null ? response.statusCode() : 500;
-                String errorBody = response != null ? new String(response.body().readAllBytes(), StandardCharsets.UTF_8) : "Unknown Error";
-                log.error("Gemini API Error (HTTP {}): {}", code, errorBody);
-                emitter.send(SseEmitter.event().data("<p><strong>Lỗi Gemini API (HTTP " + code + "):</strong> Không tìm thấy mô hình tương thích hoặc API key chưa đúng. Chi tiết: " + errorBody + "</p>"));
+                String err = readResponseBody(response);
+                emitter.send(SseEmitter.event().data("<p><strong>Lỗi Gemini (HTTP " + code + "):</strong> " + err + "</p>"));
                 emitter.complete();
                 return;
             }
 
-            try (BufferedReader reader = new BufferedReader(new InputStreamReader(response.body(), StandardCharsets.UTF_8))) {
-                String line;
-                while ((line = reader.readLine()) != null) {
-                    if (line.startsWith("data: ")) {
-                        String dataJson = line.substring(6).trim();
-                        if ("[DONE]".equalsIgnoreCase(dataJson)) {
-                            break;
-                        }
-
-                        try {
-                            JsonNode root = objectMapper.readTree(dataJson);
-                            JsonNode candidates = root.path("candidates");
-                            if (candidates.isArray() && !candidates.isEmpty()) {
-                                JsonNode parts = candidates.get(0).path("content").path("parts");
-                                if (parts.isArray() && !parts.isEmpty()) {
-                                    String textChunk = parts.get(0).path("text").asText("");
-                                    if (!textChunk.isEmpty()) {
-                                        emitter.send(textChunk);
-                                    }
-                                }
-                            }
-                        } catch (Exception parseException) {
-                            log.debug("Skip non-JSON or chunk parse error: {}", parseException.getMessage());
-                        }
-                    }
-                }
-            }
-
+            streamGeminiChunks(response.body(), emitter, traceId, startTime);
             emitter.complete();
-
         } catch (Exception e) {
-            log.error("Lỗi khi gọi Gemini API stream", e);
-            try {
-                emitter.completeWithError(e);
-            } catch (Exception ignored) {
-            }
+            log.error("[AI-TRACE][{}] Gemini streaming failed: {}", traceId, e.getMessage());
+            try { emitter.completeWithError(e); } catch (Exception ignored) {}
         }
     }
 
-    private HttpResponse<InputStream> executeGeminiRequest(String targetModel, String jsonPayload) throws Exception {
+    private HttpResponse<InputStream> executeGeminiRequest(String model, String payload, String key, String traceId) throws Exception {
         String url = String.format("https://generativelanguage.googleapis.com/v1beta/models/%s:streamGenerateContent?alt=sse&key=%s",
-                targetModel, apiKey.trim());
-
-        HttpRequest httpRequest = HttpRequest.newBuilder()
+                model, key.trim());
+        HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create(url))
                 .header("Content-Type", "application/json")
-                .POST(HttpRequest.BodyPublishers.ofString(jsonPayload, StandardCharsets.UTF_8))
+                .POST(HttpRequest.BodyPublishers.ofString(payload, StandardCharsets.UTF_8))
                 .timeout(Duration.ofSeconds(60))
                 .build();
-
-        return httpClient.send(httpRequest, HttpResponse.BodyHandlers.ofInputStream());
+        return httpClient.send(request, HttpResponse.BodyHandlers.ofInputStream());
     }
 
-    private String sanitizeModelName(String rawModel) {
-        if (rawModel == null || rawModel.trim().isEmpty()) {
-            return "gemini-2.0-flash";
+    private HttpResponse<InputStream> retryFallbackModels(String originalModel, String payload, String key, String traceId) {
+        for (String fallback : FALLBACK_MODELS) {
+            if (fallback.equalsIgnoreCase(originalModel)) continue;
+            try {
+                HttpResponse<InputStream> res = executeGeminiRequest(fallback, payload, key, traceId);
+                if (res != null && res.statusCode() == 200) return res;
+            } catch (Exception ignored) {}
         }
-        String trimmed = rawModel.trim();
-        if (trimmed.startsWith("models/")) {
-            return trimmed.substring(7);
-        }
-        return trimmed;
+        return null;
     }
 
-    private String buildFullPrompt(AiGenerateRequest request) {
-        String userPrompt = request.getPrompt() != null ? request.getPrompt() : "";
-        String action = request.getAction() != null ? request.getAction() : "";
-        String contentType = request.getContentType() != null ? request.getContentType().toUpperCase() : "GENERAL";
-
-        StringBuilder sb = new StringBuilder();
-        sb.append("Bạn là Trợ lý AI Chuyên gia Giáo dục & Thiết kế Chương trình Đào tạo Đại học cho Hệ thống Quản lý eUni.\n");
-        sb.append("Nhiệm vụ của bạn là tạo nội dung văn bản HTML phù hợp để chèn trực tiếp vào trình biên soạn văn bản (Rich Text Editor).\n");
-        sb.append("QUY TẮC ĐỊNH DẠNG BẮT BUỘC:\n");
-        sb.append("- CHỈ trả về đoạn mã HTML hợp lệ (sử dụng các thẻ <p>, <ul>, <li>, <strong>, <em>, <h4>, <table>, <thead>, <tbody>, <tr>, <th>, <td>).\n");
-        sb.append("- KHÔNG bao bọc trong khối markdown ```html hoặc ```.\n");
-        sb.append("- Ngôn từ chuẩn mực học thuật, rõ ràng, dễ đo lường và theo đúng chuẩn kiểm định giáo dục (AUN-QA / MOET / Outcome-Based Education).\n\n");
-
-        switch (contentType) {
-            case "CLO":
-            case "OUTCOME":
-                sb.append("--- HƯỚNG DẪN CHUYÊN MÔN: VIẾT CHUẨN ĐẦU RA HỌC PHẦN (CLO / Course Learning Outcomes) ---\n");
-                sb.append("- Sử dụng thang đo tư duy Bloom (Bloom's Taxonomy) với các động từ hành động đo lường được (Ví dụ: Phân tích, Thiết kế, Đánh giá, Vận dụng, Giải quyết, Xây dựng).\n");
-                sb.append("- Cấu trúc từng CLO phải gồm: [Động từ Bloom] + [Đối tượng kiến thức/kỹ năng] + [Bối cảnh/Điều kiện áp dụng].\n");
-                sb.append("- Định dạng danh sách <ul><li><strong>CLO 1:</strong> ...</li><li><strong>CLO 2:</strong> ...</li></ul>.\n\n");
-                break;
-            case "PLO":
-                sb.append("--- HƯỚNG DẪN CHUYÊN MÔN: CHUẨN ĐẦU RA CHƯƠNG TRÌNH ĐÀO TẠO (PLO) & CHỈ SỐ PI ---\n");
-                sb.append("- Xây dựng chuẩn đầu ra tổng thể cấp chương trình đào tạo (Program Learning Outcomes - PLO) và chỉ số hiệu quả (Performance Indicators - PI).\n");
-                sb.append("- Tập trung vào các mảng kiến thức chuyên sâu, kỹ năng nghề nghiệp, khả năng giải quyết vấn đề phức tạp, đạo đức nghề nghiệp và khả năng học tập suốt đời.\n");
-                sb.append("- Định dạng cấu trúc: <ul><li><strong>PLO X:</strong> [Nội dung PLO]<ul><li><strong>PI X.1:</strong> [Chỉ số thành phần]</li></ul></li></ul>.\n\n");
-                break;
-            case "SYLLABUS":
-            case "OUTLINE":
-                sb.append("--- HƯỚNG DẪN CHUYÊN MÔN: ĐỀ CƯƠNG CHI TIẾT HỌC PHẦN (Syllabus) ---\n");
-                sb.append("- Cấu trúc chương trình học hợp lý, chia theo các chương/tuần học logic từ cơ bản đến nâng cao.\n");
-                sb.append("- Mối chương cần nêu rõ: Tên chương, Chủ đề lý thuyết, Bài tập/Thực hành và Yêu cầu sinh viên tự học.\n");
-                sb.append("- Định dạng: Sử dụng <h4>Chương X: [Tên chương]</h4> kèm danh sách <ul><li>...</li></ul>.\n\n");
-                break;
-            case "COURSE_DESCRIPTION":
-            case "DESCRIPTION":
-                sb.append("--- HƯỚNG DẪN CHUYÊN MÔN: MÔ TẢ TỔNG QUAN HỌC PHẦN ---\n");
-                sb.append("- Nêu vị trí môn học trong chương trình đào tạo, mục tiêu tổng quát, phương pháp tiếp cận và những giá trị cốt lõi sinh viên sẽ nhận được.\n");
-                sb.append("- Văn phong trang trọng, súc tích, truyền cảm hứng và chuẩn hóa học thuật.\n\n");
-                break;
-            case "PREREQUISITES":
-                sb.append("--- HƯỚNG DẪN CHUYÊN MÔN: YÊU CẦU MÔN HỌC TIÊN QUYẾT & KIẾN THỨC NỀN TẢNG ---\n");
-                sb.append("- Liệt kê các môn học tiên quyết (Prerequisite), môn học song hành (Corequisite) và khung kiến thức bắt buộc sinh viên cần trang bị trước khi bắt đầu môn học.\n\n");
-                break;
-            case "ASSESSMENT":
-                sb.append("--- HƯỚNG DẪN CHUYÊN MÔN: PHƯƠNG PHÁP & MA TRẬN ĐÁNH GIÁ HỌC PHẦN ---\n");
-                sb.append("- Thiết kế phương pháp đánh giá đa dạng: Chuyên cần, Đánh giá quá trình (Bài tập/Lab/Đồ án), Thi kết thúc học phần.\n");
-                sb.append("- Nếu được yêu cầu dạng bảng, hãy tạo <table> với các cột: Thành phần đánh giá, Hình thức đánh giá, Trọng số (%), Chuẩn đầu ra (CLO) tương ứng.\n\n");
-                break;
-            default:
-                sb.append("--- HƯỚNG DẪN CHUYÊN MÔN: NỘI DUNG HỌC THUẬT GIÁO DỤC ---\n");
-                sb.append("- Đảm bảo nội dung chuẩn hóa theo mô hình giáo dục đại học.\n\n");
-                break;
+    private void streamGeminiChunks(InputStream is, SseEmitter emitter, String traceId, long startTime) throws Exception {
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(is, StandardCharsets.UTF_8))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                if (!line.startsWith("data: ")) continue;
+                String data = line.substring(6).trim();
+                if ("[DONE]".equalsIgnoreCase(data)) break;
+                try {
+                    JsonNode root = objectMapper.readTree(data);
+                    JsonNode parts = root.path("candidates").path(0).path("content").path("parts");
+                    if (parts.isArray() && !parts.isEmpty()) {
+                        String chunk = parts.get(0).path("text").asText("");
+                        if (!chunk.isEmpty()) emitter.send(chunk);
+                    }
+                } catch (Exception ignored) {}
+            }
         }
+    }
 
-        if (!action.isEmpty()) {
-            sb.append("Tác vụ cụ thể: ").append(action).append("\n");
-        }
-        sb.append("Yêu cầu của người dùng: ").append(userPrompt);
+    private String sanitizeModelName(String raw) {
+        if (raw == null || raw.isBlank()) return "gemini-2.0-flash-lite";
+        String t = raw.trim();
+        return t.startsWith("models/") ? t.substring(7) : t;
+    }
 
-        return sb.toString();
+    private String readResponseBody(HttpResponse<InputStream> res) {
+        if (res == null || res.body() == null) return "Unknown";
+        try (InputStream is = res.body()) { return new String(is.readAllBytes(), StandardCharsets.UTF_8); }
+        catch (Exception e) { return "Error reading body"; }
     }
 
     private void streamMockResponse(SseEmitter emitter) {
         try {
-            String fullContent = String.join("\n", MOCK_HTML_PARAGRAPHS);
-            int chunkSize = 15;
-
-            for (int i = 0; i < fullContent.length(); i += chunkSize) {
-                int end = Math.min(i + chunkSize, fullContent.length());
-                String chunk = fullContent.substring(i, end);
-
-                emitter.send(chunk);
-                Thread.sleep(40);
-            }
-
+            String mock = "<p><strong>Kết quả giả lập:</strong> Bạn chưa thiết lập API Key cá nhân và hệ thống chưa có default key. Vui lòng vào Cài đặt để thêm API Key.</p>";
+            emitter.send(mock);
             emitter.complete();
         } catch (Exception e) {
-            emitter.completeWithError(e);
+            try { emitter.completeWithError(e); } catch (Exception ignored) {}
         }
     }
 }

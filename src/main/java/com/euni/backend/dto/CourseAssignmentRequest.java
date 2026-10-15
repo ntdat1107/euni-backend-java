@@ -13,4 +13,17 @@ import java.util.List;
 @AllArgsConstructor
 public class CourseAssignmentRequest {
     private List<Long> courseIds;
+    private List<CourseItem> items;
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class CourseItem {
+        private Long courseId;
+        private Long structureId;
+        private Long electiveGroupId;
+        private Integer semester;
+        private Boolean required;
+    }
 }

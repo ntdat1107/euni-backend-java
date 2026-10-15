@@ -29,6 +29,10 @@ public class Major extends BaseEntity {
     @JoinColumn(name = "faculty_id")
     private Faculty faculty;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "department_id")
+    private Department department;
+
     @BatchSize(size = 20)
     @OneToMany(mappedBy = "major", cascade = CascadeType.ALL, orphanRemoval = true)
     private java.util.List<Program> programs;

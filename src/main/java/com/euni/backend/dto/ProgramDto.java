@@ -14,16 +14,18 @@ import java.time.ZonedDateTime;
 @AllArgsConstructor
 public class ProgramDto {
     private Long id;
+    private Long parentId;
+    private String parentCode;
     private String name;
     private String code;
     private String description;
     private Long majorId;
     private String majorName;
     private ProgramStatus status;
-    private String generalObjective;
-    private String specificObjectives;
-    private String learningOutcomes;
-    private String data;
+    private Integer effectiveYear;
+    private Integer totalCredits;
+    private String degreeLevel;
+    private String trainingMode;
     private ZonedDateTime createdAt;
     private ZonedDateTime updatedAt;
     private Boolean hasUncompletedCampaign;

@@ -18,6 +18,8 @@ public class MajorDto {
     private String description;
     private Long facultyId;
     private String facultyName;
+    private Long departmentId;
+    private String departmentName;
     private int programCount;
     private ZonedDateTime createdAt;
     private ZonedDateTime updatedAt;
