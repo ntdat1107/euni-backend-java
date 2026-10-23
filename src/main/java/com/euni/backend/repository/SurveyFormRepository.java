@@ -15,7 +15,24 @@ public interface SurveyFormRepository extends JpaRepository<SurveyForm, Long> {
     Optional<SurveyForm> findByPublicSlugAndDeletedFalse(String publicSlug);
 
     @EntityGraph(attributePaths = {"program", "campaignStep"})
-    Optional<SurveyForm> findByCampaignStepIdAndDeletedFalse(Long campaignStepId);
+    Optional<SurveyForm> findFirstByCampaignStepIdAndDeletedFalseOrderByVersionDescIdDesc(Long campaignStepId);
+
+    @EntityGraph(attributePaths = {"program", "campaignStep"})
+    Optional<SurveyForm> findFirstByCampaignStepIdAndIsCurrentTrueAndDeletedFalseOrderByVersionDescIdDesc(Long campaignStepId);
+
+    default Optional<SurveyForm> findByCampaignStepIdAndDeletedFalse(Long campaignStepId) {
+        return findFirstByCampaignStepIdAndDeletedFalseOrderByVersionDescIdDesc(campaignStepId);
+    }
+
+    default Optional<SurveyForm> findByCampaignStepIdAndIsCurrentTrueAndDeletedFalse(Long campaignStepId) {
+        return findFirstByCampaignStepIdAndIsCurrentTrueAndDeletedFalseOrderByVersionDescIdDesc(campaignStepId);
+    }
+
+    @EntityGraph(attributePaths = {"program", "campaignStep"})
+    List<SurveyForm> findAllByCampaignStepIdAndDeletedFalseOrderByVersionDesc(Long campaignStepId);
+
+    @EntityGraph(attributePaths = {"program", "campaignStep"})
+    Optional<SurveyForm> findByIdAndDeletedFalse(Long id);
 
     List<SurveyForm> findAllByProgramIdAndDeletedFalse(Long programId);
 

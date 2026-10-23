@@ -3,6 +3,7 @@ package com.euni.backend.service;
 import com.euni.backend.dto.SurveyCampaignDto;
 import com.euni.backend.dto.SurveyCampaignStepDto;
 import com.euni.backend.entity.*;
+import com.euni.backend.entity.enums.DomainType;
 import com.euni.backend.entity.enums.ProgramStatus;
 import com.euni.backend.entity.enums.SurveyCampaignStatus;
 import com.euni.backend.exception.ResourceNotFoundException;
@@ -19,6 +20,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.euni.backend.dto.request.SurveyCampaignRequest;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -39,6 +41,10 @@ public class SurveyCampaignService {
     private final SyllabusRepository syllabusRepository;
     private final ProgramService programService;
     private final WorkflowTemplateService workflowTemplateService;
+    private final ProgramObjectiveRepository programObjectiveRepository;
+    private final ProgramLearningOutcomeRepository programLearningOutcomeRepository;
+    private final PerformanceIndicatorRepository performanceIndicatorRepository;
+    private final ObjectivePiMapRepository objectivePiMapRepository;
 
     @Transactional(readOnly = true)
     public List<SurveyCampaignDto> getAll() {
@@ -96,7 +102,7 @@ public class SurveyCampaignService {
                 .workflowTemplate(workflowTemplate)
                 .startDate(request.getStartDate())
                 .endDate(request.getEndDate())
-                .status(request.getStatus() != null ? request.getStatus() : SurveyCampaignStatus.ACTIVE)
+                .status(request.getStatus() != null ? request.getStatus() : SurveyCampaignStatus.IN_PROGRESS)
                 .steps(new ArrayList<>())
                 .build();
 
@@ -265,11 +271,16 @@ public class SurveyCampaignService {
 
     @Transactional
     public SurveyCampaignStepDto saveStepData(Long campaignId, Long stepId, String resultData) {
-        return saveStepData(campaignId, stepId, resultData, "COMPLETED");
+        return saveStepData(campaignId, stepId, resultData, "COMPLETED", null);
     }
 
     @Transactional
     public SurveyCampaignStepDto saveStepData(Long campaignId, Long stepId, String resultData, String status) {
+        return saveStepData(campaignId, stepId, resultData, status, null);
+    }
+
+    @Transactional
+    public SurveyCampaignStepDto saveStepData(Long campaignId, Long stepId, String resultData, String status, String reviewNote) {
         SurveyCampaignStep step = stepRepository.findById(stepId)
                 .orElseThrow(() -> new ResourceNotFoundException("SurveyCampaignStep", "id", stepId));
 
@@ -328,7 +339,40 @@ public class SurveyCampaignService {
         } else {
             step.setStatus("COMPLETED");
         }
+
+        if (reviewNote != null) {
+            try {
+                ObjectNode configNode;
+                if (step.getConfiguration() != null && !step.getConfiguration().isBlank()) {
+                    JsonNode parsed = objectMapper.readTree(step.getConfiguration());
+                    configNode = parsed.isObject() ? (ObjectNode) parsed : objectMapper.createObjectNode();
+                } else {
+                    configNode = objectMapper.createObjectNode();
+                }
+                configNode.put("reviewNote", reviewNote);
+                configNode.put("reviewedAt", java.time.Instant.now().toString());
+                String currentUser = "Hệ thống";
+                try {
+                    Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+                    if (auth != null && auth.isAuthenticated() && !"anonymousUser".equals(auth.getPrincipal())) {
+                        currentUser = auth.getName();
+                    }
+                } catch (Exception ignored) {}
+                configNode.put("reviewedBy", currentUser);
+                step.setConfiguration(objectMapper.writeValueAsString(configNode));
+            } catch (Exception e) {
+                log.warn("Error updating reviewNote in step configuration", e);
+            }
+        }
+
         SurveyCampaignStep saved = stepRepository.save(step);
+
+        if ("COMPLETED".equalsIgnoreCase(saved.getStatus())) {
+            String screenCode = extractScreenCode(saved.getConfiguration());
+            if ("S2_PLO".equals(screenCode) && saved.getCampaign() != null) {
+                handleS2Sync(saved.getCampaign().getProgram(), saved.getResultData());
+            }
+        }
 
         return convertToStepDto(saved);
     }
@@ -337,6 +381,14 @@ public class SurveyCampaignService {
     public void approveCampaign(Long id) {
         SurveyCampaign campaign = campaignRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("SurveyCampaign", "id", id));
+
+        // Kiểm tra tất cả các bước phải đạt trạng thái COMPLETED
+        List<SurveyCampaignStep> steps = stepRepository.findByCampaignIdOrderByStepIndexAsc(campaign.getId());
+        boolean allStepsCompleted = !steps.isEmpty() && steps.stream()
+                .allMatch(s -> "COMPLETED".equalsIgnoreCase(s.getStatus()));
+        if (!allStepsCompleted) {
+            throw new IllegalStateException("Tất cả các bước trong quy trình phải hoàn thành (COMPLETED) trước khi hoàn tất quy trình.");
+        }
 
         campaign.setStatus(SurveyCampaignStatus.APPROVED);
         if (campaign.getProgram() != null) {
@@ -370,9 +422,172 @@ public class SurveyCampaignService {
         }
     }
 
-    private void handleS2Sync(Program program, String resultData) {
-        if (resultData == null || resultData.isEmpty()) return;
-        log.info("Handled S2_PLO direct workflow event for program: {}", program.getName());
+    @Transactional
+    public void handleS2Sync(Program program, String resultData) {
+        if (program == null || resultData == null || resultData.isBlank()) return;
+        try {
+            JsonNode rootNode = objectMapper.readTree(resultData);
+            if (rootNode == null || !rootNode.isObject()) return;
+
+            log.info("Starting S2_PLO sync-back to relational tables for program: {} (id: {})", program.getName(), program.getId());
+
+            // 1. Sync POs -> ProgramObjective
+            JsonNode posNode = rootNode.has("pos") ? rootNode.get("pos") : rootNode.get("peos");
+            List<ProgramObjective> savedPos = new ArrayList<>();
+            if (posNode != null && posNode.isArray()) {
+                int poOrder = 1;
+                for (JsonNode poNode : posNode) {
+                    String content = poNode.has("content") ? poNode.get("content").asText("") : "";
+                    if (content.isBlank()) continue;
+
+                    String code = poNode.has("code") && !poNode.get("code").asText().isBlank()
+                            ? poNode.get("code").asText()
+                            : "PO" + poOrder;
+
+                    final int currentOrder = poOrder;
+                    ProgramObjective po = programObjectiveRepository.findByProgramIdAndCode(program.getId(), code)
+                            .orElseGet(() -> ProgramObjective.builder().program(program).code(code).build());
+                    po.setContent(content);
+                    po.setOrderIndex(currentOrder);
+                    po.setDeleted(false);
+                    savedPos.add(programObjectiveRepository.save(po));
+                    poOrder++;
+                }
+
+                // Delete obsolete POs for this program
+                List<ProgramObjective> allPos = programObjectiveRepository.findAllByProgramId(program.getId());
+                for (ProgramObjective oldPo : allPos) {
+                    if (savedPos.stream().noneMatch(p -> p.getId().equals(oldPo.getId()))) {
+                        objectivePiMapRepository.deleteAllByObjectiveId(oldPo.getId());
+                        programObjectiveRepository.delete(oldPo);
+                    }
+                }
+            }
+
+            // 2. Sync PLOs & PIs -> ProgramLearningOutcome & PerformanceIndicator
+            JsonNode plosNode = rootNode.get("plos");
+            List<ProgramLearningOutcome> savedPlos = new ArrayList<>();
+
+            if (plosNode != null && plosNode.isArray()) {
+                int ploOrder = 1;
+                for (JsonNode ploNode : plosNode) {
+                    String ploContent = ploNode.has("content") ? ploNode.get("content").asText("") : "";
+                    if (ploContent.isBlank()) continue;
+
+                    String ploCode = ploNode.has("code") && !ploNode.get("code").asText().isBlank()
+                            ? ploNode.get("code").asText()
+                            : "PLO" + ploOrder;
+
+                    DomainType domain = DomainType.KNOWLEDGE;
+                    if (ploNode.has("domain")) {
+                        String domainStr = ploNode.get("domain").asText().toUpperCase();
+                        try {
+                            domain = DomainType.valueOf(domainStr);
+                        } catch (IllegalArgumentException e) {
+                            if (domainStr.contains("SKILL") || domainStr.contains("KỸ NĂNG")) {
+                                domain = DomainType.SKILL;
+                            } else if (domainStr.contains("ATTITUDE") || domainStr.contains("THÁI ĐỘ") || domainStr.contains("TỰ CHỦ")) {
+                                domain = DomainType.ATTITUDE;
+                            } else {
+                                domain = DomainType.KNOWLEDGE;
+                            }
+                        }
+                    }
+
+                    final int currentPloOrder = ploOrder;
+                    ProgramLearningOutcome plo = programLearningOutcomeRepository.findByProgramIdAndCode(program.getId(), ploCode)
+                            .orElseGet(() -> ProgramLearningOutcome.builder().program(program).code(ploCode).build());
+                    plo.setContent(ploContent);
+                    plo.setName(ploCode);
+                    plo.setDomain(domain);
+                    plo.setOrderIndex(currentPloOrder);
+                    plo.setDeleted(false);
+                    ProgramLearningOutcome savedPlo = programLearningOutcomeRepository.save(plo);
+                    savedPlos.add(savedPlo);
+
+                    // Sync PIs for this PLO
+                    JsonNode pisNode = ploNode.get("pis");
+                    List<PerformanceIndicator> savedPisForPlo = new ArrayList<>();
+                    if (pisNode != null && pisNode.isArray()) {
+                        int piOrder = 1;
+                        for (JsonNode piNode : pisNode) {
+                            String piContent = piNode.has("content") ? piNode.get("content").asText("") : "";
+                            if (piContent.isBlank()) continue;
+
+                            String piCode = piNode.has("code") && !piNode.get("code").asText().isBlank()
+                                    ? piNode.get("code").asText()
+                                    : "PI" + currentPloOrder + "." + piOrder;
+
+                            final int currentPiOrder = piOrder;
+                            PerformanceIndicator pi = performanceIndicatorRepository.findByOutcomeIdAndCode(savedPlo.getId(), piCode)
+                                    .orElseGet(() -> PerformanceIndicator.builder().outcome(savedPlo).code(piCode).build());
+                            pi.setContent(piContent);
+                            pi.setOrderIndex(currentPiOrder);
+                            pi.setDeleted(false);
+                            PerformanceIndicator savedPi = performanceIndicatorRepository.save(pi);
+                            savedPisForPlo.add(savedPi);
+                            piOrder++;
+                        }
+                    }
+
+                    // Delete obsolete PIs for this PLO
+                    List<PerformanceIndicator> currentPis = performanceIndicatorRepository.findAllByOutcomeId(savedPlo.getId());
+                    for (PerformanceIndicator oldPi : currentPis) {
+                        if (savedPisForPlo.stream().noneMatch(p -> p.getId().equals(oldPi.getId()))) {
+                            performanceIndicatorRepository.delete(oldPi);
+                        }
+                    }
+
+                    ploOrder++;
+                }
+
+                // Delete obsolete PLOs for this program
+                List<ProgramLearningOutcome> allCurrentPlos = programLearningOutcomeRepository.findAllByProgramId(program.getId());
+                for (ProgramLearningOutcome oldPlo : allCurrentPlos) {
+                    if (savedPlos.stream().noneMatch(p -> p.getId().equals(oldPlo.getId()))) {
+                        programLearningOutcomeRepository.delete(oldPlo);
+                    }
+                }
+            }
+
+            // 3. Sync Matrix -> ObjectivePiMap
+            List<ObjectivePiMap> existingMaps = objectivePiMapRepository.findAllByProgramId(program.getId());
+            if (!existingMaps.isEmpty()) {
+                objectivePiMapRepository.deleteAll(existingMaps);
+            }
+
+            JsonNode matrixNode = rootNode.get("matrix");
+            if (matrixNode != null && matrixNode.isArray()) {
+                for (int peoIdx = 0; peoIdx < Math.min(matrixNode.size(), savedPos.size()); peoIdx++) {
+                    JsonNode ploRow = matrixNode.get(peoIdx);
+                    if (ploRow == null || !ploRow.isArray()) continue;
+                    ProgramObjective currentPo = savedPos.get(peoIdx);
+
+                    for (int ploIdx = 0; ploIdx < Math.min(ploRow.size(), savedPlos.size()); ploIdx++) {
+                        JsonNode piRow = ploRow.get(ploIdx);
+                        if (piRow == null || !piRow.isArray()) continue;
+                        ProgramLearningOutcome currentPlo = savedPlos.get(ploIdx);
+                        List<PerformanceIndicator> ploPis = performanceIndicatorRepository.findAllByOutcomeId(currentPlo.getId());
+
+                        for (int piIdx = 0; piIdx < Math.min(piRow.size(), ploPis.size()); piIdx++) {
+                            if (piRow.get(piIdx).asBoolean()) {
+                                PerformanceIndicator currentPi = ploPis.get(piIdx);
+                                ObjectivePiMap map = ObjectivePiMap.builder()
+                                        .objective(currentPo)
+                                        .performanceIndicator(currentPi)
+                                        .build();
+                                objectivePiMapRepository.save(map);
+                            }
+                        }
+                    }
+                }
+            }
+
+            log.info("Successfully synced S2_PLO data: {} POs, {} PLOs for program: {}",
+                    savedPos.size(), savedPlos.size(), program.getName());
+        } catch (Exception e) {
+            log.error("Failed to sync S2_PLO data for program: {}", program.getName(), e);
+        }
     }
 
     private void handleS5Sync(Long campaignId, Program program, String resultData) {

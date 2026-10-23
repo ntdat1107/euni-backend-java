@@ -84,7 +84,7 @@ public class SurveyCampaignSeeder implements CommandLineRunner {
                         .description("Đợt khảo sát toàn diện rà soát chuẩn đầu ra PLO, xây dựng Đề cương CLO và Ma trận kỹ năng cho khóa 2026.")
                         .program(program)
                         .workflowTemplate(wfTemplate)
-                        .status(SurveyCampaignStatus.ACTIVE)
+                        .status(SurveyCampaignStatus.IN_PROGRESS)
                         .startDate(LocalDateTime.now().minusDays(5))
                         .endDate(LocalDateTime.now().plusDays(25))
                         .build();
@@ -201,7 +201,7 @@ public class SurveyCampaignSeeder implements CommandLineRunner {
                 config.put("approverRole", tStep.get("approverRole"));
                 config.put("prerequisiteStepCodes", prereqs != null ? prereqs : List.of());
 
-                String status = (orderNo != null && orderNo == 1) ? "ACTIVE" : "DRAFT";
+                String status = (orderNo != null && orderNo == 1) ? "IN_PROGRESS" : "PENDING";
 
                 SurveyCampaignStep step = SurveyCampaignStep.builder()
                         .campaign(campaign)

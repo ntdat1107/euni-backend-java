@@ -46,6 +46,17 @@ public class SurveyForm extends BaseEntity {
     @Column(name = "public_slug", unique = true, length = 100)
     private String publicSlug;
 
+    @Column(nullable = false)
+    @Builder.Default
+    private Integer version = 1;
+
+    @Column(name = "is_current", nullable = false)
+    @Builder.Default
+    private Boolean isCurrent = true;
+
+    @Column(name = "previous_version_id")
+    private Long previousVersionId;
+
     @Enumerated(EnumType.STRING)
     @Column(length = 20, nullable = false)
     @Builder.Default

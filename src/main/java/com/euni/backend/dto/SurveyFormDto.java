@@ -26,6 +26,9 @@ public class SurveyFormDto {
     private String publicSlug;
     private String publicUrl;
     private SurveyFormStatus status;
+    private Integer version;
+    private Boolean isCurrent;
+    private Long previousVersionId;
     private boolean anonymous;
     private ZonedDateTime startDate;
     private ZonedDateTime endDate;

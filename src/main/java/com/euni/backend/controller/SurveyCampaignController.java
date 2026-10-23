@@ -64,7 +64,8 @@ public class SurveyCampaignController extends BaseController {
             @RequestBody Map<String, Object> data) {
         String resultData = data.get("resultData") != null ? data.get("resultData").toString() : "{}";
         String status = data.get("status") != null ? data.get("status").toString() : null;
-        return ok(campaignService.saveStepData(id, stepId, resultData, status));
+        String reviewNote = data.get("reviewNote") != null ? data.get("reviewNote").toString() : null;
+        return ok(campaignService.saveStepData(id, stepId, resultData, status, reviewNote));
     }
 
     @GetMapping("/{id}/courses/{courseId}")

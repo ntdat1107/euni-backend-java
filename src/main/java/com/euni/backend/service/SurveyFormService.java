@@ -9,12 +9,16 @@ import com.euni.backend.entity.enums.SurveyQuestionType;
 import com.euni.backend.exception.ResourceNotFoundException;
 import com.euni.backend.repository.*;
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
+import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -34,46 +38,28 @@ public class SurveyFormService {
     private final ProgramRepository programRepository;
     private final ObjectMapper objectMapper;
 
-    @Transactional
-    public SurveyFormDto getOrCreateFormForStep(Long stepId, String username) {
+    @Transactional(readOnly = true)
+    public SurveyFormDto getFormForStep(Long stepId) {
         SurveyCampaignStep step = stepRepository.findById(stepId)
                 .orElseThrow(() -> new ResourceNotFoundException("SurveyCampaignStep", "id", stepId));
 
-        Optional<SurveyForm> existingForm = formRepository.findByCampaignStepIdAndDeletedFalse(stepId);
-        if (existingForm.isPresent()) {
-            SurveyForm form = existingForm.get();
-            // Ensure step status is properly synced with form status
-            if (form.getStatus() == SurveyFormStatus.PUBLISHED && !"ACTIVE".equals(step.getStatus()) && !"IN_PROGRESS".equals(step.getStatus())) {
-                step.setStatus("ACTIVE");
-                stepRepository.save(step);
-            } else if (form.getStatus() == SurveyFormStatus.CLOSED && !"COMPLETED".equals(step.getStatus())) {
-                step.setStatus("COMPLETED");
-                stepRepository.save(step);
-            }
-            return convertToDto(form);
+        Optional<SurveyForm> currentFormOpt = formRepository.findByCampaignStepIdAndIsCurrentTrueAndDeletedFalse(stepId);
+        if (currentFormOpt.isEmpty()) {
+            currentFormOpt = formRepository.findByCampaignStepIdAndDeletedFalse(stepId);
         }
 
-        // Initialize default Google Form template for Bước 1 (DRAFT mode, no public slug yet)
+        if (currentFormOpt.isPresent()) {
+            return convertToDto(currentFormOpt.get());
+        }
+
+        // Chưa có biểu mẫu trong DB: Trả về DTO mẫu dựng sẵn trong bộ nhớ, KHÔNG ghi vào DB
         Program program = step.getCampaign().getProgram();
+        return buildDefaultInitialFormDto(step, program);
+    }
 
-        SurveyForm form = SurveyForm.builder()
-                .campaignStep(step)
-                .program(program)
-                .title("Phiếu Khảo sát Nhu cầu Đào tạo - " + program.getName())
-                .description("<p>Để phát triển và hoàn thiện chương trình đào tạo, kính đề nghị Quý cơ quan, Đơn vị, Chuyên gia và Cựu sinh viên đóng góp ý kiến về nhu cầu đào tạo nhân lực.</p>")
-                .targetAudience("Nhà tuyển dụng, Chuyên gia chuyên môn, Giảng viên, Cựu sinh viên")
-                .publicSlug(null)
-                .status(SurveyFormStatus.DRAFT)
-                .anonymous(false)
-                .startDate(ZonedDateTime.now())
-                .endDate(ZonedDateTime.now().plusMonths(1))
-                .createdBy(username)
-                .build();
-
-        SurveyForm savedForm = formRepository.save(form);
-        seedDefaultSectionsAndQuestions(savedForm);
-
-        return convertToDto(formRepository.findById(savedForm.getId()).orElse(savedForm));
+    @Transactional(readOnly = true)
+    public SurveyFormDto getOrCreateFormForStep(Long stepId, String username) {
+        return getFormForStep(stepId);
     }
 
     @Transactional
@@ -81,76 +67,114 @@ public class SurveyFormService {
         SurveyCampaignStep step = stepRepository.findById(stepId)
                 .orElseThrow(() -> new ResourceNotFoundException("SurveyCampaignStep", "id", stepId));
 
-        SurveyForm form = formRepository.findByCampaignStepIdAndDeletedFalse(stepId)
-                .orElseGet(() -> {
-                    Program program = step.getCampaign().getProgram();
-                    return SurveyForm.builder()
-                            .campaignStep(step)
-                            .program(program)
-                            .publicSlug(null)
-                            .status(SurveyFormStatus.DRAFT)
-                            .build();
-                });
+        SurveyForm currentForm = formRepository.findByCampaignStepIdAndIsCurrentTrueAndDeletedFalse(stepId)
+                .orElse(null);
 
-        if (form.getStatus() == SurveyFormStatus.CLOSED) {
-            throw new IllegalStateException("Không thể chỉnh sửa biểu mẫu khảo sát đã kết thúc.");
-        }
+        SurveyForm targetForm;
+        if (currentForm == null) {
+            // Lần đầu tiên maker lưu nháp: Khởi tạo version 1 trong cơ sở dữ liệu
+            Program program = step.getCampaign().getProgram();
+            targetForm = SurveyForm.builder()
+                    .campaignStep(step)
+                    .program(program)
+                    .version(1)
+                    .isCurrent(true)
+                    .title(request.getTitle())
+                    .description(request.getDescription())
+                    .targetAudience(request.getTargetAudience())
+                    .anonymous(request.isAnonymous())
+                    .startDate(request.getStartDate())
+                    .endDate(request.getEndDate())
+                    .publicSlug(null)
+                    .status(SurveyFormStatus.DRAFT)
+                    .createdBy(username)
+                    .build();
+            targetForm = formRepository.save(targetForm);
 
-        if (form.getId() != null) {
-            long existingSubs = submissionRepository.countByFormIdAndDeletedFalse(form.getId());
+            if (!"COMPLETED".equalsIgnoreCase(step.getStatus()) && !"UNDER_REVIEW".equalsIgnoreCase(step.getStatus())) {
+                step.setStatus("IN_PROGRESS");
+                stepRepository.save(step);
+            }
+        } else {
+            long existingSubs = submissionRepository.countByFormIdAndDeletedFalse(currentForm.getId());
             if (existingSubs > 0) {
-                throw new IllegalStateException("Biểu mẫu đã tiếp nhận " + existingSubs + " phản hồi. Để tránh xung đột dữ liệu, không thể thay đổi lại cấu trúc các phần và câu hỏi.");
+                // Yêu cầu 1: Nếu đã có đơn ý kiến, tăng version của phiếu khảo sát
+                currentForm.setIsCurrent(false);
+                if (currentForm.getStatus() == SurveyFormStatus.PUBLISHED) {
+                    currentForm.setStatus(SurveyFormStatus.CLOSED);
+                }
+                formRepository.saveAndFlush(currentForm);
+
+                int nextVersion = (currentForm.getVersion() != null ? currentForm.getVersion() : 1) + 1;
+                targetForm = SurveyForm.builder()
+                        .campaignStep(step)
+                        .program(step.getCampaign().getProgram())
+                        .version(nextVersion)
+                        .isCurrent(true)
+                        .previousVersionId(currentForm.getId())
+                        .title(request.getTitle())
+                        .description(request.getDescription())
+                        .targetAudience(request.getTargetAudience())
+                        .anonymous(request.isAnonymous())
+                        .startDate(request.getStartDate())
+                        .endDate(request.getEndDate())
+                        .publicSlug(null)
+                        .status(SurveyFormStatus.DRAFT)
+                        .createdBy(username)
+                        .build();
+                targetForm = formRepository.save(targetForm);
+            } else {
+                // Chưa có người làm k/s thì khi sửa không cần tăng version
+                targetForm = currentForm;
+                targetForm.setTitle(request.getTitle());
+                targetForm.setDescription(request.getDescription());
+                targetForm.setTargetAudience(request.getTargetAudience());
+                targetForm.setAnonymous(request.isAnonymous());
+                targetForm.setStartDate(request.getStartDate());
+                targetForm.setEndDate(request.getEndDate());
+                targetForm.setStatus(SurveyFormStatus.DRAFT);
+                targetForm.setUpdatedBy(username);
+                targetForm.getQuestions().clear();
+                targetForm.getSections().clear();
+                targetForm = formRepository.save(targetForm);
             }
         }
 
-        form.setTitle(request.getTitle());
-        form.setDescription(request.getDescription());
-        form.setTargetAudience(request.getTargetAudience());
-        form.setAnonymous(request.isAnonymous());
-        form.setStartDate(request.getStartDate());
-        form.setEndDate(request.getEndDate());
-        form.setUpdatedBy(username);
-
-        // Clear existing questions, options and sections to recreate cleanly
-        form.getQuestions().clear();
-        form.getSections().clear();
-        SurveyForm savedForm = formRepository.save(form);
-
-        Map<Long, SurveySection> tempSectionMap = new HashMap<>();
+        // Recreate sections and questions
         if (request.getSections() != null) {
             for (int sIdx = 0; sIdx < request.getSections().size(); sIdx++) {
                 SurveySectionDto sDto = request.getSections().get(sIdx);
                 SurveySection section = SurveySection.builder()
-                        .form(savedForm)
+                        .form(targetForm)
                         .title(sDto.getTitle())
                         .description(sDto.getDescription())
                         .orderIndex(sIdx + 1)
                         .build();
                 SurveySection savedSection = sectionRepository.save(section);
-                savedForm.getSections().add(savedSection);
-                if (sDto.getId() != null) {
-                    tempSectionMap.put(sDto.getId(), savedSection);
-                }
+                targetForm.getSections().add(savedSection);
 
-                // Add questions inside section
                 if (sDto.getQuestions() != null) {
                     for (int qIdx = 0; qIdx < sDto.getQuestions().size(); qIdx++) {
                         SurveyQuestionDto qDto = sDto.getQuestions().get(qIdx);
-                        saveQuestionWithOrder(savedForm, savedSection, qDto, qIdx + 1);
+                        saveQuestionWithOrder(targetForm, savedSection, qDto, qIdx + 1);
                     }
                 }
             }
         }
 
-        // Add direct questions not belonging to any section
         if (request.getDirectQuestions() != null) {
             for (int qIdx = 0; qIdx < request.getDirectQuestions().size(); qIdx++) {
                 SurveyQuestionDto qDto = request.getDirectQuestions().get(qIdx);
-                saveQuestionWithOrder(savedForm, null, qDto, qIdx + 1);
+                saveQuestionWithOrder(targetForm, null, qDto, qIdx + 1);
             }
         }
 
-        SurveyForm updated = formRepository.save(savedForm);
+        if (!"COMPLETED".equalsIgnoreCase(step.getStatus()) && !"UNDER_REVIEW".equalsIgnoreCase(step.getStatus())) {
+            step.setStatus("IN_PROGRESS");
+            stepRepository.save(step);
+        }
+
+        SurveyForm updated = formRepository.save(targetForm);
         return convertToDto(updated);
     }
 
@@ -185,52 +209,247 @@ public class SurveyFormService {
     }
 
     @Transactional
-    public SurveyFormDto publishForm(Long stepId, String username) {
-        SurveyForm form = formRepository.findByCampaignStepIdAndDeletedFalse(stepId)
+    public SurveyFormDto submitReview(Long stepId, String username) {
+        SurveyCampaignStep step = stepRepository.findById(stepId)
+                .orElseThrow(() -> new ResourceNotFoundException("SurveyCampaignStep", "id", stepId));
+
+        SurveyForm form = formRepository.findByCampaignStepIdAndIsCurrentTrueAndDeletedFalse(stepId)
                 .orElseThrow(() -> new ResourceNotFoundException("SurveyForm for Step", "stepId", stepId));
 
-        // Generate public slug on publish event if not yet assigned
+        form.setStatus(SurveyFormStatus.PENDING_REVIEW);
+        form.setUpdatedBy(username);
+        formRepository.save(form);
+
+        step.setStatus("UNDER_REVIEW");
+        stepRepository.save(step);
+
+        return convertToDto(form);
+    }
+
+    @Transactional
+    public SurveyFormDto recallSubmission(Long stepId, String username) {
+        SurveyCampaignStep step = stepRepository.findById(stepId)
+                .orElseThrow(() -> new ResourceNotFoundException("SurveyCampaignStep", "id", stepId));
+
+        SurveyForm form = formRepository.findByCampaignStepIdAndIsCurrentTrueAndDeletedFalse(stepId)
+                .orElseThrow(() -> new ResourceNotFoundException("SurveyForm for Step", "stepId", stepId));
+
+        if (form.getStatus() != SurveyFormStatus.PENDING_REVIEW) {
+            throw new IllegalStateException("Chỉ có thể thu hồi khi biểu mẫu đang ở trạng thái Chờ phê duyệt!");
+        }
+
+        form.setStatus(SurveyFormStatus.DRAFT);
+        form.setUpdatedBy(username);
+        formRepository.save(form);
+
+        step.setStatus("IN_PROGRESS");
+        stepRepository.save(step);
+
+        return convertToDto(form);
+    }
+
+    @Transactional
+    public SurveyFormDto approveDesign(Long stepId, String username) {
+        SurveyCampaignStep step = stepRepository.findById(stepId)
+                .orElseThrow(() -> new ResourceNotFoundException("SurveyCampaignStep", "id", stepId));
+
+        SurveyForm form = formRepository.findByCampaignStepIdAndIsCurrentTrueAndDeletedFalse(stepId)
+                .orElseThrow(() -> new ResourceNotFoundException("SurveyForm for Step", "stepId", stepId));
+
+        form.setStatus(SurveyFormStatus.APPROVED);
+        form.setUpdatedBy(username);
+        formRepository.save(form);
+
+        step.setStatus("IN_PROGRESS");
+        updateStepConfigDesignReview(step, true, null, username);
+        stepRepository.save(step);
+
+        return convertToDto(form);
+    }
+
+    @Transactional
+    public SurveyFormDto rejectDesign(Long stepId, String reason, String username) {
+        SurveyCampaignStep step = stepRepository.findById(stepId)
+                .orElseThrow(() -> new ResourceNotFoundException("SurveyCampaignStep", "id", stepId));
+
+        SurveyForm form = formRepository.findByCampaignStepIdAndIsCurrentTrueAndDeletedFalse(stepId)
+                .orElseThrow(() -> new ResourceNotFoundException("SurveyForm for Step", "stepId", stepId));
+
+        form.setStatus(SurveyFormStatus.DRAFT);
+        form.setUpdatedBy(username);
+        formRepository.save(form);
+
+        step.setStatus("REJECTED");
+        updateStepConfigDesignReview(step, false, reason, username);
+        stepRepository.save(step);
+
+        return convertToDto(form);
+    }
+
+    @Transactional
+    public SurveyFormDto publishForm(Long stepId, String username) {
+        SurveyCampaignStep step = stepRepository.findById(stepId)
+                .orElseThrow(() -> new ResourceNotFoundException("SurveyCampaignStep", "id", stepId));
+
+        SurveyForm form = formRepository.findByCampaignStepIdAndIsCurrentTrueAndDeletedFalse(stepId)
+                .orElseThrow(() -> new ResourceNotFoundException("SurveyForm for Step", "stepId", stepId));
+
+        // Yêu cầu 2: Phải được approver duyệt rồi thì mới cho phép tạo link khảo sát
+        if (form.getStatus() != SurveyFormStatus.APPROVED) {
+            throw new IllegalStateException("Biểu mẫu khảo sát phải được cấp có thẩm quyền phê duyệt thiết kế trước khi xuất bản và tạo link khảo sát!");
+        }
+
         if (form.getPublicSlug() == null || form.getPublicSlug().isBlank()) {
             Program program = form.getProgram();
-            Long campaignId = form.getCampaignStep() != null && form.getCampaignStep().getCampaign() != null
-                    ? form.getCampaignStep().getCampaign().getId()
-                    : form.getId();
-            String codePrefix = program != null && program.getCode() != null
+            Long campaignId = step.getCampaign() != null ? step.getCampaign().getId() : form.getId();
+            String codePrefix = (program != null && program.getCode() != null)
                     ? program.getCode().toLowerCase().replaceAll("[^a-z0-9]", "-")
                     : "survey";
-            String slug = "survey-" + codePrefix + "-c" + campaignId + "-" + UUID.randomUUID().toString().substring(0, 8);
+            int v = form.getVersion() != null ? form.getVersion() : 1;
+            String slug = "survey-" + codePrefix + "-c" + campaignId + "-v" + v + "-" + UUID.randomUUID().toString().substring(0, 8);
             form.setPublicSlug(slug);
         }
 
         form.setStatus(SurveyFormStatus.PUBLISHED);
         form.setUpdatedBy(username);
-        
-        // Also update step status to ACTIVE
+        step.setStatus("IN_PROGRESS");
+        stepRepository.save(step);
+
+        return convertToDto(formRepository.save(form));
+    }
+
+    @Transactional
+    public SurveyFormDto requestRevision(Long stepId, String username) {
+        // Yêu cầu 3: Đang khảo sát rồi thì approver có thể cho phép sửa form khảo sát, khi đó khóa link cũ
+        SurveyCampaignStep step = stepRepository.findById(stepId)
+                .orElseThrow(() -> new ResourceNotFoundException("SurveyCampaignStep", "id", stepId));
+
+        SurveyForm oldForm = formRepository.findByCampaignStepIdAndIsCurrentTrueAndDeletedFalse(stepId)
+                .orElseThrow(() -> new ResourceNotFoundException("SurveyForm for Step", "stepId", stepId));
+
+        // 1. Khóa link cũ
+        oldForm.setStatus(SurveyFormStatus.CLOSED);
+        oldForm.setIsCurrent(false);
+        oldForm.setUpdatedBy(username);
+        formRepository.saveAndFlush(oldForm);
+
+        // 2. Tạo form mới tăng version, trạng thái DRAFT
+        int nextVersion = (oldForm.getVersion() != null ? oldForm.getVersion() : 1) + 1;
+        SurveyForm newForm = SurveyForm.builder()
+                .campaignStep(step)
+                .program(oldForm.getProgram())
+                .version(nextVersion)
+                .isCurrent(true)
+                .previousVersionId(oldForm.getId())
+                .title(oldForm.getTitle())
+                .description(oldForm.getDescription())
+                .targetAudience(oldForm.getTargetAudience())
+                .anonymous(oldForm.isAnonymous())
+                .startDate(oldForm.getStartDate())
+                .endDate(oldForm.getEndDate())
+                .publicSlug(null)
+                .status(SurveyFormStatus.DRAFT)
+                .createdBy(username)
+                .build();
+        SurveyForm savedNewForm = formRepository.save(newForm);
+
+        // Sao chép cấu trúc
+        cloneFormStructure(oldForm, savedNewForm);
+
+        step.setStatus("IN_PROGRESS");
+        updateStepConfigRevision(step, username);
+        stepRepository.save(step);
+
+        return convertToDto(formRepository.findById(savedNewForm.getId()).orElse(savedNewForm));
+    }
+
+    private void cloneFormStructure(SurveyForm sourceForm, SurveyForm targetForm) {
+        List<SurveySection> sourceSections = sectionRepository.findAllByFormIdAndDeletedFalseOrderByOrderIndexAsc(sourceForm.getId());
+        List<SurveyQuestion> sourceQuestions = questionRepository.findAllByFormIdAndDeletedFalseOrderByOrderIndexAsc(sourceForm.getId());
+
+        Map<Long, SurveySection> oldToNewSectionMap = new HashMap<>();
+        for (SurveySection oldSec : sourceSections) {
+            SurveySection newSec = sectionRepository.save(SurveySection.builder()
+                    .form(targetForm)
+                    .title(oldSec.getTitle())
+                    .description(oldSec.getDescription())
+                    .orderIndex(oldSec.getOrderIndex())
+                    .build());
+            targetForm.getSections().add(newSec);
+            oldToNewSectionMap.put(oldSec.getId(), newSec);
+        }
+
+        for (SurveyQuestion oldQ : sourceQuestions) {
+            SurveySection newSec = oldQ.getSection() != null ? oldToNewSectionMap.get(oldQ.getSection().getId()) : null;
+            SurveyQuestion newQ = questionRepository.save(SurveyQuestion.builder()
+                    .form(targetForm)
+                    .section(newSec)
+                    .content(oldQ.getContent())
+                    .helpText(oldQ.getHelpText())
+                    .questionType(oldQ.getQuestionType())
+                    .required(oldQ.isRequired())
+                    .orderIndex(oldQ.getOrderIndex())
+                    .minRating(oldQ.getMinRating())
+                    .maxRating(oldQ.getMaxRating())
+                    .build());
+            targetForm.getQuestions().add(newQ);
+
+            if (oldQ.getOptions() != null) {
+                for (SurveyQuestionOption oldOpt : oldQ.getOptions()) {
+                    if (!oldOpt.isDeleted()) {
+                        SurveyQuestionOption newOpt = optionRepository.save(SurveyQuestionOption.builder()
+                                .question(newQ)
+                                .content(oldOpt.getContent())
+                                .orderIndex(oldOpt.getOrderIndex())
+                                .build());
+                        newQ.getOptions().add(newOpt);
+                    }
+                }
+            }
+        }
+    }
+
+    @Transactional
+    public SurveyFormDto closeForm(Long stepId, String username) {
+        SurveyForm form = formRepository.findByCampaignStepIdAndIsCurrentTrueAndDeletedFalse(stepId)
+                .orElseThrow(() -> new ResourceNotFoundException("SurveyForm for Step", "stepId", stepId));
+
+        form.setStatus(SurveyFormStatus.CLOSED);
+        form.setUpdatedBy(username);
+
         SurveyCampaignStep step = form.getCampaignStep();
         if (step != null) {
-            step.setStatus("ACTIVE");
             stepRepository.save(step);
         }
 
         return convertToDto(formRepository.save(form));
     }
 
-    @Transactional
-    public SurveyFormDto closeForm(Long stepId, String username) {
-        SurveyForm form = formRepository.findByCampaignStepIdAndDeletedFalse(stepId)
-                .orElseThrow(() -> new ResourceNotFoundException("SurveyForm for Step", "stepId", stepId));
+    @Transactional(readOnly = true)
+    public List<SurveyFormVersionDto> getFormVersions(Long stepId) {
+        List<SurveyForm> forms = formRepository.findAllByCampaignStepIdAndDeletedFalseOrderByVersionDesc(stepId);
+        return forms.stream().map(f -> {
+            long count = submissionRepository.countByFormIdAndDeletedFalse(f.getId());
+            return SurveyFormVersionDto.builder()
+                    .id(f.getId())
+                    .campaignStepId(stepId)
+                    .version(f.getVersion() != null ? f.getVersion() : 1)
+                    .status(f.getStatus())
+                    .title(f.getTitle())
+                    .publicSlug(f.getPublicSlug())
+                    .totalSubmissions(count)
+                    .isCurrent(Boolean.TRUE.equals(f.getIsCurrent()))
+                    .createdAt(f.getCreatedAt())
+                    .updatedAt(f.getUpdatedAt())
+                    .build();
+        }).collect(Collectors.toList());
+    }
 
-        form.setStatus(SurveyFormStatus.CLOSED);
-        form.setUpdatedBy(username);
-
-        // When closed, step can be marked COMPLETED
-        SurveyCampaignStep step = form.getCampaignStep();
-        if (step != null) {
-            step.setStatus("COMPLETED");
-            stepRepository.save(step);
-        }
-
-        return convertToDto(formRepository.save(form));
+    @Transactional(readOnly = true)
+    public SurveyFormDto getFormById(Long formId) {
+        SurveyForm form = formRepository.findByIdAndDeletedFalse(formId)
+                .orElseThrow(() -> new ResourceNotFoundException("SurveyForm", "id", formId));
+        return convertToDto(form);
     }
 
     @Transactional(readOnly = true)
@@ -295,12 +514,12 @@ public class SurveyFormService {
         }
 
         long totalCount = submissionRepository.countByFormIdAndDeletedFalse(form.getId());
-        
-        // Update resultData of the step with high-level summary
+
         SurveyCampaignStep step = form.getCampaignStep();
         if (step != null) {
             try {
                 Map<String, Object> summary = new HashMap<>();
+                summary.put("currentVersion", form.getVersion() != null ? form.getVersion() : 1);
                 summary.put("totalSubmissions", totalCount);
                 summary.put("lastSubmittedAt", ZonedDateTime.now().toString());
                 summary.put("status", form.getStatus().name());
@@ -320,9 +539,21 @@ public class SurveyFormService {
 
     @Transactional(readOnly = true)
     public List<SurveySubmissionDto> getFormSubmissions(Long stepId) {
-        SurveyForm form = formRepository.findByCampaignStepIdAndDeletedFalse(stepId)
+        SurveyForm form = formRepository.findByCampaignStepIdAndIsCurrentTrueAndDeletedFalse(stepId)
+                .or(() -> formRepository.findByCampaignStepIdAndDeletedFalse(stepId))
                 .orElseThrow(() -> new ResourceNotFoundException("SurveyForm for Step", "stepId", stepId));
 
+        return getSubmissionsForForm(form);
+    }
+
+    @Transactional(readOnly = true)
+    public List<SurveySubmissionDto> getFormSubmissionsByFormId(Long formId) {
+        SurveyForm form = formRepository.findByIdAndDeletedFalse(formId)
+                .orElseThrow(() -> new ResourceNotFoundException("SurveyForm", "id", formId));
+        return getSubmissionsForForm(form);
+    }
+
+    private List<SurveySubmissionDto> getSubmissionsForForm(SurveyForm form) {
         List<SurveySubmission> subs = submissionRepository.findAllByFormIdAndDeletedFalseOrderBySubmittedAtDesc(form.getId());
         return subs.stream().map(s -> {
             List<SurveySubmissionDto.AnswerDto> aDtos = s.getAnswers().stream().map(a -> {
@@ -361,9 +592,21 @@ public class SurveyFormService {
 
     @Transactional(readOnly = true)
     public SurveySummaryDto getFormSummary(Long stepId) {
-        SurveyForm form = formRepository.findByCampaignStepIdAndDeletedFalse(stepId)
+        SurveyForm form = formRepository.findByCampaignStepIdAndIsCurrentTrueAndDeletedFalse(stepId)
+                .or(() -> formRepository.findByCampaignStepIdAndDeletedFalse(stepId))
                 .orElseThrow(() -> new ResourceNotFoundException("SurveyForm for Step", "stepId", stepId));
 
+        return getSummaryForForm(form);
+    }
+
+    @Transactional(readOnly = true)
+    public SurveySummaryDto getFormSummaryByFormId(Long formId) {
+        SurveyForm form = formRepository.findByIdAndDeletedFalse(formId)
+                .orElseThrow(() -> new ResourceNotFoundException("SurveyForm", "id", formId));
+        return getSummaryForForm(form);
+    }
+
+    private SurveySummaryDto getSummaryForForm(SurveyForm form) {
         List<SurveySubmission> subs = submissionRepository.findAllByFormIdAndDeletedFalseOrderBySubmittedAtDesc(form.getId());
         long totalSubs = subs.size();
 
@@ -378,14 +621,12 @@ public class SurveyFormService {
             List<String> textSamples = new ArrayList<>();
 
             if (q.getQuestionType() == SurveyQuestionType.LIKERT_SCALE) {
-                // Calculate average and distribution 1 to 5
                 List<Integer> ratings = answers.stream()
                         .map(SurveyAnswer::getNumericValue)
                         .filter(Objects::nonNull)
                         .toList();
                 if (!ratings.isEmpty()) {
                     avgScore = ratings.stream().mapToInt(Integer::intValue).average().orElse(0.0);
-                    // round to 2 decimals
                     avgScore = Math.round(avgScore * 100.0) / 100.0;
                 }
                 for (int level = 1; level <= 5; level++) {
@@ -410,7 +651,6 @@ public class SurveyFormService {
                     }
                 }
             } else {
-                // text answers
                 textSamples = answers.stream()
                         .map(SurveyAnswer::getTextValue)
                         .filter(t -> t != null && !t.isBlank())
@@ -433,54 +673,117 @@ public class SurveyFormService {
                 .formTitle(form.getTitle())
                 .totalSubmissions(totalSubs)
                 .publicSlug(form.getPublicSlug())
-                .publicUrl("/public/survey/" + form.getPublicSlug())
+                .publicUrl(form.getPublicSlug() != null ? "/public/survey/" + form.getPublicSlug() : null)
                 .status(form.getStatus().name())
                 .questionStats(questionStats)
                 .build();
     }
 
-    private void seedDefaultSectionsAndQuestions(SurveyForm form) {
-        // Section 1: Đối tượng & Lĩnh vực hoạt động
-        SurveySection s1 = sectionRepository.save(SurveySection.builder()
-                .form(form)
-                .title("I. Thông tin đối tượng tham gia khảo sát")
-                .description("Vui lòng cho biết vai trò và lĩnh vực hoạt động chính của Quý cơ quan / cá nhân.")
-                .orderIndex(1)
-                .build());
-        form.getSections().add(s1);
+    private void updateStepConfigDesignReview(SurveyCampaignStep step, boolean approved, String reviewNote, String username) {
+        try {
+            ObjectNode configNode;
+            if (step.getConfiguration() != null && !step.getConfiguration().isBlank()) {
+                JsonNode parsed = objectMapper.readTree(step.getConfiguration());
+                configNode = parsed.isObject() ? (ObjectNode) parsed : objectMapper.createObjectNode();
+            } else {
+                configNode = objectMapper.createObjectNode();
+            }
+            configNode.put("designApproved", approved);
+            if (approved) {
+                configNode.put("designApprovedBy", username);
+                configNode.put("designApprovedAt", Instant.now().toString());
+                configNode.remove("reviewNote");
+            } else {
+                configNode.put("reviewNote", reviewNote != null ? reviewNote : "");
+                configNode.put("reviewedBy", username);
+                configNode.put("reviewedAt", Instant.now().toString());
+            }
+            step.setConfiguration(objectMapper.writeValueAsString(configNode));
+        } catch (Exception e) {
+            log.warn("Error updating step configuration", e);
+        }
+    }
 
-        SurveyQuestion q1 = questionRepository.save(SurveyQuestion.builder()
-                .form(form)
-                .section(s1)
+    private void updateStepConfigRevision(SurveyCampaignStep step, String username) {
+        try {
+            ObjectNode configNode;
+            if (step.getConfiguration() != null && !step.getConfiguration().isBlank()) {
+                JsonNode parsed = objectMapper.readTree(step.getConfiguration());
+                configNode = parsed.isObject() ? (ObjectNode) parsed : objectMapper.createObjectNode();
+            } else {
+                configNode = objectMapper.createObjectNode();
+            }
+            configNode.put("revisionRequestedBy", username);
+            configNode.put("revisionRequestedAt", Instant.now().toString());
+            configNode.put("designApproved", false);
+            step.setConfiguration(objectMapper.writeValueAsString(configNode));
+        } catch (Exception e) {
+            log.warn("Error updating step configuration", e);
+        }
+    }
+
+    private SurveyFormDto buildDefaultInitialFormDto(SurveyCampaignStep step, Program program) {
+        String progName = program != null ? program.getName() : "Chương trình đào tạo";
+        String progCode = program != null ? program.getCode() : "";
+        Long progId = program != null ? program.getId() : null;
+
+        List<SurveySectionDto> defaultSections = buildDefaultSectionDtos();
+
+        return SurveyFormDto.builder()
+                .id(null)
+                .campaignStepId(step.getId())
+                .programId(progId)
+                .programCode(progCode)
+                .programName(progName)
+                .title("Phiếu Khảo sát Nhu cầu Đào tạo - " + progName)
+                .description("Để phát triển và hoàn thiện chương trình đào tạo, kính đề nghị Quý cơ quan, Đơn vị, Chuyên gia và Cựu sinh viên đóng góp ý kiến về nhu cầu đào tạo nhân lực.")
+                .targetAudience("Nhà tuyển dụng, Chuyên gia chuyên môn, Giảng viên, Cựu sinh viên")
+                .publicSlug(null)
+                .publicUrl(null)
+                .status(null)
+                .version(null)
+                .isCurrent(false)
+                .previousVersionId(null)
+                .anonymous(false)
+                .startDate(ZonedDateTime.now())
+                .endDate(ZonedDateTime.now().plusMonths(1))
+                .totalSubmissions(0)
+                .sections(defaultSections)
+                .directQuestions(new ArrayList<>())
+                .build();
+    }
+
+    private List<SurveySectionDto> buildDefaultSectionDtos() {
+        List<SurveySectionDto> sections = new ArrayList<>();
+
+        List<SurveyOptionDto> opts1 = List.of(
+                "Doanh nghiệp / Nhà tuyển dụng", "Nhà khoa học / Chuyên gia", 
+                "Giảng viên", "Cựu sinh viên", "Đại diện hiệp hội nghề nghiệp"
+        ).stream().map(txt -> SurveyOptionDto.builder().content(txt).build()).toList();
+
+        SurveyQuestionDto q1 = SurveyQuestionDto.builder()
                 .content("Nhóm đối tượng đóng góp ý kiến:")
                 .questionType(SurveyQuestionType.MULTIPLE_CHOICE)
                 .required(true)
                 .orderIndex(1)
-                .build());
-        form.getQuestions().add(q1);
-        List<String> opts1 = List.of("Doanh nghiệp / Nhà tuyển dụng", "Nhà khoa học / Chuyên gia", "Giảng viên", "Cựu sinh viên", "Đại diện hiệp hội nghề nghiệp");
-        for (int i = 0; i < opts1.size(); i++) {
-            optionRepository.save(SurveyQuestionOption.builder().question(q1).content(opts1.get(i)).orderIndex(i + 1).build());
-        }
+                .options(opts1)
+                .build();
 
-        // Section 2: Yêu cầu về kiến thức
-        SurveySection s2 = sectionRepository.save(SurveySection.builder()
-                .form(form)
-                .title("II. Yêu cầu đối với nhân lực về KIẾN THỨC")
-                .description("Vui lòng đánh giá mức độ quan trọng theo thang điểm 1 đến 5 (1: Hoàn toàn không đồng ý -> 5: Hoàn toàn đồng ý).")
-                .orderIndex(2)
+        sections.add(SurveySectionDto.builder()
+                .title("I. Thông tin đối tượng tham gia khảo sát")
+                .description("Vui lòng cho biết vai trò và lĩnh vực hoạt động chính của Quý cơ quan / cá nhân.")
+                .orderIndex(1)
+                .questions(List.of(q1))
                 .build());
-        form.getSections().add(s2);
 
         List<String> kQuestions = List.of(
                 "Kiến thức thực tế vững chắc, kiến thức lý thuyết sâu rộng trong phạm vi của ngành đào tạo.",
                 "Kiến thức về công nghệ thông tin và ứng dụng chuyển đổi số đáp ứng yêu cầu công việc.",
                 "Kiến thức cơ bản về quản lý, điều hành hoạt động chuyên môn."
         );
+        List<SurveyQuestionDto> qSec2 = new ArrayList<>();
         for (int i = 0; i < kQuestions.size(); i++) {
-            SurveyQuestion q = questionRepository.save(SurveyQuestion.builder()
-                    .form(form)
-                    .section(s2)
+            qSec2.add(SurveyQuestionDto.builder()
                     .content(kQuestions.get(i))
                     .questionType(SurveyQuestionType.LIKERT_SCALE)
                     .required(true)
@@ -488,27 +791,22 @@ public class SurveyFormService {
                     .minRating(1)
                     .maxRating(5)
                     .build());
-            form.getQuestions().add(q);
         }
-
-        // Section 3: Yêu cầu về kỹ năng
-        SurveySection s3 = sectionRepository.save(SurveySection.builder()
-                .form(form)
-                .title("III. Yêu cầu đối với nhân lực về KỸ NĂNG")
-                .description("Đánh giá các nhóm kỹ năng nghề nghiệp và kỹ năng mềm.")
-                .orderIndex(3)
+        sections.add(SurveySectionDto.builder()
+                .title("II. Yêu cầu đối với nhân lực về KIẾN THỨC")
+                .description("Vui lòng đánh giá mức độ quan trọng theo thang điểm 1 đến 5 (1: Hoàn toàn không đồng ý -> 5: Hoàn toàn đồng ý).")
+                .orderIndex(2)
+                .questions(qSec2)
                 .build());
-        form.getSections().add(s3);
 
         List<String> sQuestions = List.of(
                 "Kỹ năng giải quyết các vấn đề kỹ thuật phức tạp trong môi trường thực tế.",
                 "Kỹ năng làm việc nhóm và giao tiếp, truyền đạt giải pháp chuyên môn.",
                 "Năng lực ngoại ngữ và khả năng tự nghiên cứu tài liệu quốc tế."
         );
+        List<SurveyQuestionDto> qSec3 = new ArrayList<>();
         for (int i = 0; i < sQuestions.size(); i++) {
-            SurveyQuestion q = questionRepository.save(SurveyQuestion.builder()
-                    .form(form)
-                    .section(s3)
+            qSec3.add(SurveyQuestionDto.builder()
                     .content(sQuestions.get(i))
                     .questionType(SurveyQuestionType.LIKERT_SCALE)
                     .required(true)
@@ -516,37 +814,36 @@ public class SurveyFormService {
                     .minRating(1)
                     .maxRating(5)
                     .build());
-            form.getQuestions().add(q);
         }
+        sections.add(SurveySectionDto.builder()
+                .title("III. Yêu cầu đối với nhân lực về KỸ NĂNG")
+                .description("Đánh giá các nhóm kỹ năng nghề nghiệp và kỹ năng mềm.")
+                .orderIndex(3)
+                .questions(qSec3)
+                .build());
 
-        // Section 4: Nhu cầu nhân lực và tuyển dụng
-        SurveySection s4 = sectionRepository.save(SurveySection.builder()
-                .form(form)
+        List<SurveyQuestionDto> qSec4 = List.of(
+                SurveyQuestionDto.builder()
+                        .content("Nhu cầu tuyển dụng nhân lực ngành đào tạo này hàng năm của Đơn vị (ghi rõ số lượng ước tính):")
+                        .questionType(SurveyQuestionType.SHORT_TEXT)
+                        .required(false)
+                        .orderIndex(1)
+                        .build(),
+                SurveyQuestionDto.builder()
+                        .content("Ý kiến đóng góp khác của Quý vị nhằm nâng cao chất lượng chương trình đào tạo:")
+                        .questionType(SurveyQuestionType.LONG_TEXT)
+                        .required(false)
+                        .orderIndex(2)
+                        .build()
+        );
+        sections.add(SurveySectionDto.builder()
                 .title("IV. Nhu cầu tuyển dụng và ý kiến đóng góp")
                 .description("Thông tin dự báo nhu cầu nhân lực trong 3-5 năm tới.")
                 .orderIndex(4)
+                .questions(qSec4)
                 .build());
-        form.getSections().add(s4);
 
-        SurveyQuestion qDemand1 = questionRepository.save(SurveyQuestion.builder()
-                .form(form)
-                .section(s4)
-                .content("Nhu cầu tuyển dụng nhân lực ngành đào tạo này hàng năm của Đơn vị (ghi rõ số lượng ước tính):")
-                .questionType(SurveyQuestionType.SHORT_TEXT)
-                .required(false)
-                .orderIndex(1)
-                .build());
-        form.getQuestions().add(qDemand1);
-
-        SurveyQuestion qFeedback = questionRepository.save(SurveyQuestion.builder()
-                .form(form)
-                .section(s4)
-                .content("Ý kiến đóng góp khác của Quý vị nhằm nâng cao chất lượng chương trình đào tạo:")
-                .questionType(SurveyQuestionType.LONG_TEXT)
-                .required(false)
-                .orderIndex(2)
-                .build());
-        form.getQuestions().add(qFeedback);
+        return sections;
     }
 
     private SurveyFormDto convertToDto(SurveyForm form) {
@@ -586,8 +883,11 @@ public class SurveyFormService {
                 .description(form.getDescription())
                 .targetAudience(form.getTargetAudience())
                 .publicSlug(form.getStatus() == SurveyFormStatus.PUBLISHED ? form.getPublicSlug() : null)
-                .publicUrl(form.getStatus() == SurveyFormStatus.PUBLISHED && form.getPublicSlug() != null ? "/public/survey/" + form.getPublicSlug() : null)
+                .publicUrl((form.getStatus() == SurveyFormStatus.PUBLISHED && form.getPublicSlug() != null) ? "/public/survey/" + form.getPublicSlug() : null)
                 .status(form.getStatus())
+                .version(form.getVersion() != null ? form.getVersion() : 1)
+                .isCurrent(Boolean.TRUE.equals(form.getIsCurrent()))
+                .previousVersionId(form.getPreviousVersionId())
                 .anonymous(form.isAnonymous())
                 .startDate(form.getStartDate())
                 .endDate(form.getEndDate())
