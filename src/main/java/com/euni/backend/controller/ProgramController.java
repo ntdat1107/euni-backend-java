@@ -105,6 +105,19 @@ public class ProgramController extends BaseController {
         return ok(programStructureService.addElectiveGroup(structureId, dto));
     }
 
+    @PutMapping("/structures/elective-groups/{groupId}")
+    public ResponseEntity<ApiResponse<ProgramElectiveGroupDto>> updateElectiveGroup(
+            @PathVariable Long groupId,
+            @RequestBody ProgramElectiveGroupDto dto) {
+        return ok(programStructureService.updateElectiveGroup(groupId, dto));
+    }
+
+    @DeleteMapping("/structures/elective-groups/{groupId}")
+    public ResponseEntity<ApiResponse<Void>> deleteElectiveGroup(@PathVariable Long groupId) {
+        programStructureService.deleteElectiveGroup(groupId);
+        return ok(null);
+    }
+
     // --- OBE & Matrices ---
     @GetMapping("/{id}/obe")
     public ResponseEntity<ApiResponse<ProgramObeMatrixResponse>> getProgramObe(@PathVariable Long id) {

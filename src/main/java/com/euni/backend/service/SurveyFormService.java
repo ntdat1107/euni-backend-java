@@ -221,6 +221,7 @@ public class SurveyFormService {
         formRepository.save(form);
 
         step.setStatus("UNDER_REVIEW");
+        archiveStepReviewNote(step);
         stepRepository.save(step);
 
         return convertToDto(form);
@@ -701,6 +702,32 @@ public class SurveyFormService {
             step.setConfiguration(objectMapper.writeValueAsString(configNode));
         } catch (Exception e) {
             log.warn("Error updating step configuration", e);
+        }
+    }
+
+    private void archiveStepReviewNote(SurveyCampaignStep step) {
+        if (step.getConfiguration() != null && !step.getConfiguration().isBlank()) {
+            try {
+                JsonNode parsed = objectMapper.readTree(step.getConfiguration());
+                if (parsed.isObject()) {
+                    ObjectNode configNode = (ObjectNode) parsed;
+                    if (configNode.has("reviewNote") && !configNode.get("reviewNote").asText().isBlank()) {
+                        configNode.put("previousReviewNote", configNode.get("reviewNote").asText());
+                        if (configNode.has("reviewedBy")) {
+                            configNode.put("previousReviewedBy", configNode.get("reviewedBy").asText());
+                        }
+                        if (configNode.has("reviewedAt")) {
+                            configNode.put("previousReviewedAt", configNode.get("reviewedAt").asText());
+                        }
+                        configNode.remove("reviewNote");
+                        configNode.remove("reviewedBy");
+                        configNode.remove("reviewedAt");
+                        step.setConfiguration(objectMapper.writeValueAsString(configNode));
+                    }
+                }
+            } catch (Exception e) {
+                log.warn("Error archiving review note in step config", e);
+            }
         }
     }
 

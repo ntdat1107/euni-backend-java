@@ -142,7 +142,7 @@ public class AcademicCoreSeeder implements CommandLineRunner {
             ProgramLearningOutcome plo1 = seedPlo(seClcProg, "PLO1", "Nền tảng Toán & Kỹ thuật", "Áp dụng kiến thức toán học và khoa học máy tính vào xây dựng phần mềm.", DomainType.KNOWLEDGE, 1);
             ProgramLearningOutcome plo2 = seedPlo(seClcProg, "PLO2", "Thiết kế & Kiến trúc Phần mềm", "Thiết kế kiến trúc hệ thống phần mềm đáp ứng yêu cầu phức tạp.", DomainType.SKILL, 2);
             ProgramLearningOutcome plo3 = seedPlo(seClcProg, "PLO3", "Kiểm thử & Đảm bảo chất lượng", "Xây dựng chiến lược kiểm thử tự động và quản lý chất lượng phần mềm.", DomainType.SKILL, 3);
-            ProgramLearningOutcome plo4 = seedPlo(seClcProg, "PLO4", "Quản lý Dự án & Làm việc nhóm", "Áp dụng Agile/Scrum và phối hợp hiệu quả trong nhóm đa ngành.", DomainType.SKILL, 4);
+            ProgramLearningOutcome plo4 = seedPlo(seClcProg, "PLO4", "Quản lý Dự án & Làm việc nhóm", "Áp dụng Agile/Scrum và phối hợp hiệu quả trong nhóm đa ngành.", DomainType.AUTONOMY, 4);
             ProgramLearningOutcome plo5 = seedPlo(seClcProg, "PLO5", "Đạo đức & Trách nhiệm Xã hội", "Tuân thủ pháp luật, đạo đức nghề nghiệp và cam kết học tập suốt đời.", DomainType.ATTITUDE, 5);
 
             // PIs

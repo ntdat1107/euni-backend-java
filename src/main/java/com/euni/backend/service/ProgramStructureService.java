@@ -185,6 +185,39 @@ public class ProgramStructureService {
                 .build();
     }
 
+    @Transactional
+    public ProgramElectiveGroupDto updateElectiveGroup(Long groupId, ProgramElectiveGroupDto dto) {
+        ProgramElectiveGroup group = programElectiveGroupRepository.findActiveById(groupId)
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy nhóm tự chọn: " + groupId));
+
+        if (dto.getName() != null && !dto.getName().trim().isEmpty()) {
+            group.setName(dto.getName().trim());
+        }
+        if (dto.getMinCredits() != null) {
+            group.setMinCredits(dto.getMinCredits());
+        }
+        if (dto.getMinCourses() != null) {
+            group.setMinCourses(dto.getMinCourses());
+        }
+
+        ProgramElectiveGroup saved = programElectiveGroupRepository.save(group);
+        return ProgramElectiveGroupDto.builder()
+                .id(saved.getId())
+                .structureId(saved.getStructure().getId())
+                .name(saved.getName())
+                .minCredits(saved.getMinCredits())
+                .minCourses(saved.getMinCourses())
+                .build();
+    }
+
+    @Transactional
+    public void deleteElectiveGroup(Long groupId) {
+        ProgramElectiveGroup group = programElectiveGroupRepository.findActiveById(groupId)
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy nhóm tự chọn: " + groupId));
+        group.setDeleted(true);
+        programElectiveGroupRepository.save(group);
+    }
+
     private ProgramStructureTreeResponse toResponse(ProgramStructure ps) {
         return ProgramStructureTreeResponse.builder()
                 .id(ps.getId())

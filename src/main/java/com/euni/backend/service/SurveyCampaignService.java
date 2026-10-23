@@ -281,11 +281,16 @@ public class SurveyCampaignService {
 
     @Transactional
     public SurveyCampaignStepDto saveStepData(Long campaignId, Long stepId, String resultData, String status, String reviewNote) {
-        SurveyCampaignStep step = stepRepository.findById(stepId)
-                .orElseThrow(() -> new ResourceNotFoundException("SurveyCampaignStep", "id", stepId));
-
-        if (!step.getCampaign().getId().equals(campaignId)) {
-            throw new IllegalArgumentException("Step does not belong to the specified campaign");
+        SurveyCampaignStep step = stepRepository.findById(stepId).orElse(null);
+        if (step == null || !step.getCampaign().getId().equals(campaignId)) {
+            List<SurveyCampaignStep> steps = stepRepository.findByCampaignIdOrderByStepIndexAsc(campaignId);
+            step = steps.stream()
+                    .filter(s -> s.getStepIndex() != null && s.getStepIndex().equals(stepId.intValue()))
+                    .findFirst()
+                    .orElse(null);
+            if (step == null) {
+                throw new ResourceNotFoundException("SurveyCampaignStep", "id", stepId);
+            }
         }
 
         try {
@@ -340,7 +345,9 @@ public class SurveyCampaignService {
             step.setStatus("COMPLETED");
         }
 
-        if (reviewNote != null) {
+        if ("UNDER_REVIEW".equalsIgnoreCase(step.getStatus())) {
+            archiveStepReviewNote(step);
+        } else if (reviewNote != null) {
             try {
                 ObjectNode configNode;
                 if (step.getConfiguration() != null && !step.getConfiguration().isBlank()) {
@@ -431,6 +438,9 @@ public class SurveyCampaignService {
 
             log.info("Starting S2_PLO sync-back to relational tables for program: {} (id: {})", program.getName(), program.getId());
 
+            // 0. Xóa trước toàn bộ mapping cũ trong objective_pi_maps của CTĐT này
+            objectivePiMapRepository.deleteAllByProgramId(program.getId());
+
             // 1. Sync POs -> ProgramObjective
             JsonNode posNode = rootNode.has("pos") ? rootNode.get("pos") : rootNode.get("peos");
             List<ProgramObjective> savedPos = new ArrayList<>();
@@ -467,6 +477,7 @@ public class SurveyCampaignService {
             // 2. Sync PLOs & PIs -> ProgramLearningOutcome & PerformanceIndicator
             JsonNode plosNode = rootNode.get("plos");
             List<ProgramLearningOutcome> savedPlos = new ArrayList<>();
+            Map<Long, List<PerformanceIndicator>> pisByPloId = new HashMap<>();
 
             if (plosNode != null && plosNode.isArray()) {
                 int ploOrder = 1;
@@ -486,7 +497,9 @@ public class SurveyCampaignService {
                         } catch (IllegalArgumentException e) {
                             if (domainStr.contains("SKILL") || domainStr.contains("KỸ NĂNG")) {
                                 domain = DomainType.SKILL;
-                            } else if (domainStr.contains("ATTITUDE") || domainStr.contains("THÁI ĐỘ") || domainStr.contains("TỰ CHỦ")) {
+                            } else if (domainStr.contains("AUTONOMY") || domainStr.contains("NĂNG LỰC") || domainStr.contains("TỰ CHỦ")) {
+                                domain = DomainType.AUTONOMY;
+                            } else if (domainStr.contains("ATTITUDE") || domainStr.contains("PHẨM CHẤT") || domainStr.contains("THÁI ĐỘ")) {
                                 domain = DomainType.ATTITUDE;
                             } else {
                                 domain = DomainType.KNOWLEDGE;
@@ -534,10 +547,12 @@ public class SurveyCampaignService {
                     List<PerformanceIndicator> currentPis = performanceIndicatorRepository.findAllByOutcomeId(savedPlo.getId());
                     for (PerformanceIndicator oldPi : currentPis) {
                         if (savedPisForPlo.stream().noneMatch(p -> p.getId().equals(oldPi.getId()))) {
+                            objectivePiMapRepository.deleteAllByPerformanceIndicatorId(oldPi.getId());
                             performanceIndicatorRepository.delete(oldPi);
                         }
                     }
 
+                    pisByPloId.put(savedPlo.getId(), savedPisForPlo);
                     ploOrder++;
                 }
 
@@ -551,11 +566,6 @@ public class SurveyCampaignService {
             }
 
             // 3. Sync Matrix -> ObjectivePiMap
-            List<ObjectivePiMap> existingMaps = objectivePiMapRepository.findAllByProgramId(program.getId());
-            if (!existingMaps.isEmpty()) {
-                objectivePiMapRepository.deleteAll(existingMaps);
-            }
-
             JsonNode matrixNode = rootNode.get("matrix");
             if (matrixNode != null && matrixNode.isArray()) {
                 for (int peoIdx = 0; peoIdx < Math.min(matrixNode.size(), savedPos.size()); peoIdx++) {
@@ -567,7 +577,7 @@ public class SurveyCampaignService {
                         JsonNode piRow = ploRow.get(ploIdx);
                         if (piRow == null || !piRow.isArray()) continue;
                         ProgramLearningOutcome currentPlo = savedPlos.get(ploIdx);
-                        List<PerformanceIndicator> ploPis = performanceIndicatorRepository.findAllByOutcomeId(currentPlo.getId());
+                        List<PerformanceIndicator> ploPis = pisByPloId.getOrDefault(currentPlo.getId(), List.of());
 
                         for (int piIdx = 0; piIdx < Math.min(piRow.size(), ploPis.size()); piIdx++) {
                             if (piRow.get(piIdx).asBoolean()) {
@@ -587,6 +597,7 @@ public class SurveyCampaignService {
                     savedPos.size(), savedPlos.size(), program.getName());
         } catch (Exception e) {
             log.error("Failed to sync S2_PLO data for program: {}", program.getName(), e);
+            throw new RuntimeException("Failed to sync S2_PLO data: " + e.getMessage(), e);
         }
     }
 
@@ -719,6 +730,32 @@ public class SurveyCampaignService {
                 .createdAt(saved.getCreatedAt())
                 .updatedAt(saved.getUpdatedAt())
                 .build();
+    }
+
+    private void archiveStepReviewNote(SurveyCampaignStep step) {
+        if (step.getConfiguration() != null && !step.getConfiguration().isBlank()) {
+            try {
+                JsonNode parsed = objectMapper.readTree(step.getConfiguration());
+                if (parsed.isObject()) {
+                    ObjectNode configNode = (ObjectNode) parsed;
+                    if (configNode.has("reviewNote") && !configNode.get("reviewNote").asText().isBlank()) {
+                        configNode.put("previousReviewNote", configNode.get("reviewNote").asText());
+                        if (configNode.has("reviewedBy")) {
+                            configNode.put("previousReviewedBy", configNode.get("reviewedBy").asText());
+                        }
+                        if (configNode.has("reviewedAt")) {
+                            configNode.put("previousReviewedAt", configNode.get("reviewedAt").asText());
+                        }
+                        configNode.remove("reviewNote");
+                        configNode.remove("reviewedBy");
+                        configNode.remove("reviewedAt");
+                        step.setConfiguration(objectMapper.writeValueAsString(configNode));
+                    }
+                }
+            } catch (Exception e) {
+                log.warn("Error archiving review note in step config", e);
+            }
+        }
     }
 
     private SurveyCampaignStepDto convertToStepDto(SurveyCampaignStep entity) {

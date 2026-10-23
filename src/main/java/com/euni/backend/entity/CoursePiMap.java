@@ -2,6 +2,8 @@ package com.euni.backend.entity;
 
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.OnDelete;
+import org.hibernate.annotations.OnDeleteAction;
 
 @Entity
 @Table(name = "course_pi_maps", uniqueConstraints = {
@@ -24,6 +26,7 @@ public class CoursePiMap extends BaseEntity {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "pi_id", nullable = false)
+    @OnDelete(action = OnDeleteAction.CASCADE)
     private PerformanceIndicator performanceIndicator;
 
     @Column(nullable = false)

@@ -3,6 +3,8 @@ package com.euni.backend.entity;
 import com.euni.backend.entity.enums.BloomLevel;
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.OnDelete;
+import org.hibernate.annotations.OnDeleteAction;
 
 @Entity
 @Table(name = "performance_indicators")
@@ -19,6 +21,7 @@ public class PerformanceIndicator extends BaseEntity {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "outcome_id", nullable = false)
+    @OnDelete(action = OnDeleteAction.CASCADE)
     private ProgramLearningOutcome outcome;
 
     @Column(nullable = false, length = 50)
