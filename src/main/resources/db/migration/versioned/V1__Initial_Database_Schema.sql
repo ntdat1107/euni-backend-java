@@ -463,11 +463,14 @@ CREATE TABLE syllabuses (
     program_course_id BIGINT NOT NULL REFERENCES program_courses(id) ON DELETE CASCADE,
     version VARCHAR(20) NOT NULL DEFAULT '1.0', -- vd: 1.0, 2.0
     status VARCHAR(30) NOT NULL DEFAULT 'DRAFT', -- DRAFT, REVIEWING, APPROVED, DEPRECATED
+    course_description TEXT,
+    course_objectives JSON, -- Muc tieu hoc phan (CO: kien thuc, ky nang, tu chu)
     teaching_methods TEXT,
     student_duties TEXT,
-    assessment_scheme JSON, -- Rubric đánh giá (chuyên cần, giữa kỳ, đồ án, cuối kỳ)
-    weekly_schedule JSON, -- Kế hoạch giảng dạy 15 tuần
-    textbooks JSON, -- Giáo trình chính & tài liệu tham khảo
+    assessment_scheme JSON, -- Rubric danh gia (chuyen can, giua ky, do an, cuoi ky)
+    weekly_schedule JSON, -- Ke hoach giang day 15 tuan
+    textbooks JSON, -- Giao trinh chinh & tai lieu tham khao
+    facilities_requirements TEXT, -- Yeu cau ve phong may, phan mem, trang thiet bi
     is_master BOOLEAN NOT NULL DEFAULT FALSE,
     approved_by BIGINT REFERENCES users(id) ON DELETE SET NULL,
     approved_at TIMESTAMPTZ,

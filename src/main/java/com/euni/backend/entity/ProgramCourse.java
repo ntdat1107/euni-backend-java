@@ -32,10 +32,13 @@ public class ProgramCourse extends BaseEntity {
     @JoinColumn(name = "elective_group_id")
     private ProgramElectiveGroup electiveGroup;
 
-
     private Integer semester;
 
     @Column(name = "is_required")
     @Builder.Default
     private Boolean required = true;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "applied_syllabus_id")
+    private Syllabus appliedSyllabus;
 }

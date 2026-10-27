@@ -2,9 +2,11 @@ package com.euni.backend.repository;
 
 import com.euni.backend.entity.CoursePiMap;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Optional;
@@ -21,4 +23,9 @@ public interface CoursePiMapRepository extends JpaRepository<CoursePiMap, Long> 
     List<CoursePiMap> findAllByProgramCourseId(@Param("programCourseId") Long programCourseId);
 
     void deleteAllByProgramCourseId(Long programCourseId);
+
+    @Modifying
+    @Transactional
+    @Query("DELETE FROM CoursePiMap m WHERE m.performanceIndicator.id = :piId")
+    void deleteAllByPerformanceIndicatorId(@Param("piId") Long piId);
 }

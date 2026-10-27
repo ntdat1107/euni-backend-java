@@ -33,6 +33,13 @@ public class Syllabus extends BaseEntity {
     @Builder.Default
     private String status = "DRAFT"; // DRAFT, REVIEWING, APPROVED, DEPRECATED
 
+    @Column(name = "course_description", columnDefinition = "TEXT")
+    private String courseDescription;
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "course_objectives", columnDefinition = "json")
+    private String courseObjectives;
+
     @Column(name = "teaching_methods", columnDefinition = "TEXT")
     private String teachingMethods;
 
@@ -50,6 +57,9 @@ public class Syllabus extends BaseEntity {
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "textbooks", columnDefinition = "json")
     private String textbooks;
+
+    @Column(name = "facilities_requirements", columnDefinition = "TEXT")
+    private String facilitiesRequirements;
 
     @Column(name = "is_master", nullable = false)
     @Builder.Default

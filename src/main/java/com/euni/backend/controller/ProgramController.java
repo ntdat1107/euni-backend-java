@@ -131,4 +131,18 @@ public class ProgramController extends BaseController {
         programObeService.updateCoursePiMap(request);
         return ok(null);
     }
+
+    @PutMapping("/{id}/obe/course-matrix/batch")
+    public ResponseEntity<ApiResponse<Void>> batchUpdateCoursePiMatrix(
+            @PathVariable Long id,
+            @RequestBody List<UpdateCoursePiMapRequest> requests) {
+        programObeService.batchUpdateCoursePiMap(id, requests);
+        return ok(null);
+    }
+
+    @PostMapping("/{id}/obe/auto-derive")
+    public ResponseEntity<ApiResponse<ProgramObeMatrixResponse>> autoDeriveMatrixFromSyllabuses(
+            @PathVariable Long id) {
+        return ok(programObeService.autoDeriveMatrixFromSyllabuses(id));
+    }
 }

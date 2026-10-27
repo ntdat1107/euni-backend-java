@@ -21,6 +21,7 @@ import org.springframework.transaction.annotation.Transactional;
 import com.euni.backend.dto.request.SurveyCampaignRequest;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -45,6 +46,9 @@ public class SurveyCampaignService {
     private final ProgramLearningOutcomeRepository programLearningOutcomeRepository;
     private final PerformanceIndicatorRepository performanceIndicatorRepository;
     private final ObjectivePiMapRepository objectivePiMapRepository;
+    private final CourseLearningOutcomeRepository courseLearningOutcomeRepository;
+    private final CloPiMapRepository cloPiMapRepository;
+    private final CoursePiMapRepository coursePiMapRepository;
 
     @Transactional(readOnly = true)
     public List<SurveyCampaignDto> getAll() {
@@ -378,6 +382,8 @@ public class SurveyCampaignService {
             String screenCode = extractScreenCode(saved.getConfiguration());
             if ("S2_PLO".equals(screenCode) && saved.getCampaign() != null) {
                 handleS2Sync(saved.getCampaign().getProgram(), saved.getResultData());
+            } else if ("S6_MATRIX".equals(screenCode) && saved.getCampaign() != null) {
+                handleS6Sync(saved.getCampaign().getProgram(), saved.getResultData());
             }
         }
 
@@ -422,6 +428,9 @@ public class SurveyCampaignService {
                     break;
                 case "S5_CLO":
                     handleS5Sync(campaign.getId(), campaign.getProgram(), step.getResultData());
+                    break;
+                case "S6_MATRIX":
+                    handleS6Sync(campaign.getProgram(), step.getResultData());
                     break;
                 default:
                     log.debug("No sync logic for screen: {}", screenCode);
@@ -548,6 +557,8 @@ public class SurveyCampaignService {
                     for (PerformanceIndicator oldPi : currentPis) {
                         if (savedPisForPlo.stream().noneMatch(p -> p.getId().equals(oldPi.getId()))) {
                             objectivePiMapRepository.deleteAllByPerformanceIndicatorId(oldPi.getId());
+                            coursePiMapRepository.deleteAllByPerformanceIndicatorId(oldPi.getId());
+                            cloPiMapRepository.deleteAllByPerformanceIndicatorId(oldPi.getId());
                             performanceIndicatorRepository.delete(oldPi);
                         }
                     }
@@ -560,6 +571,13 @@ public class SurveyCampaignService {
                 List<ProgramLearningOutcome> allCurrentPlos = programLearningOutcomeRepository.findAllByProgramId(program.getId());
                 for (ProgramLearningOutcome oldPlo : allCurrentPlos) {
                     if (savedPlos.stream().noneMatch(p -> p.getId().equals(oldPlo.getId()))) {
+                        List<PerformanceIndicator> oldPis = performanceIndicatorRepository.findAllByOutcomeId(oldPlo.getId());
+                        for (PerformanceIndicator oldPi : oldPis) {
+                            objectivePiMapRepository.deleteAllByPerformanceIndicatorId(oldPi.getId());
+                            coursePiMapRepository.deleteAllByPerformanceIndicatorId(oldPi.getId());
+                            cloPiMapRepository.deleteAllByPerformanceIndicatorId(oldPi.getId());
+                            performanceIndicatorRepository.delete(oldPi);
+                        }
                         programLearningOutcomeRepository.delete(oldPlo);
                     }
                 }
@@ -605,6 +623,168 @@ public class SurveyCampaignService {
         log.info("Handled S5_CLO direct workflow event for program: {}", program.getName());
     }
 
+    @Transactional
+    public void handleS6Sync(Program program, String resultData) {
+        if (program == null || resultData == null || resultData.isBlank()) return;
+        try {
+            JsonNode root = objectMapper.readTree(resultData);
+            JsonNode mappingNode = root.has("mapping") ? root.get("mapping") : (root.has("matrix") ? root.get("matrix") : null);
+            if (mappingNode == null || !mappingNode.isObject()) return;
+
+            log.info("Starting S6_MATRIX sync-back for program: {}", program.getName());
+
+            List<ProgramCourse> pcs = programCourseRepository.findAllByProgramId(program.getId());
+            Map<Long, ProgramCourse> pcByCourseId = pcs.stream()
+                    .collect(Collectors.toMap(pc -> pc.getCourse().getId(), pc -> pc, (a, b) -> a));
+            Map<Long, ProgramCourse> pcById = pcs.stream()
+                    .collect(Collectors.toMap(ProgramCourse::getId, pc -> pc, (a, b) -> a));
+
+            List<PerformanceIndicator> allPis = performanceIndicatorRepository.findAllByProgramId(program.getId());
+            Map<Long, PerformanceIndicator> piById = allPis.stream()
+                    .collect(Collectors.toMap(PerformanceIndicator::getId, p -> p, (a, b) -> a));
+            Map<String, PerformanceIndicator> piByCode = allPis.stream()
+                    .collect(Collectors.toMap(PerformanceIndicator::getCode, p -> p, (a, b) -> a));
+
+            Iterator<Map.Entry<String, JsonNode>> fields = mappingNode.fields();
+            while (fields.hasNext()) {
+                Map.Entry<String, JsonNode> entry = fields.next();
+                String rowKey = entry.getKey();
+                JsonNode piMapNode = entry.getValue();
+                if (!piMapNode.isObject()) continue;
+
+                ProgramCourse pc = null;
+                try {
+                    Long numKey = Long.valueOf(rowKey);
+                    pc = pcById.get(numKey);
+                    if (pc == null) pc = pcByCourseId.get(numKey);
+                } catch (Exception ignored) {}
+
+                if (pc == null) continue;
+
+                Iterator<Map.Entry<String, JsonNode>> piFields = piMapNode.fields();
+                while (piFields.hasNext()) {
+                    Map.Entry<String, JsonNode> piEntry = piFields.next();
+                    String piKey = piEntry.getKey();
+                    JsonNode valNode = piEntry.getValue();
+
+                    PerformanceIndicator pi = null;
+                    try {
+                        Long piNum = Long.valueOf(piKey);
+                        pi = piById.get(piNum);
+                    } catch (Exception ignored) {}
+                    if (pi == null) {
+                        pi = piByCode.get(piKey);
+                    }
+                    if (pi == null) continue;
+
+                    Integer level = null;
+                    if (valNode.isInt()) {
+                        level = valNode.asInt();
+                    } else if (valNode.isTextual()) {
+                        String txt = valNode.asText();
+                        if ("I".equalsIgnoreCase(txt) || "1".equals(txt)) level = 1;
+                        else if ("R".equalsIgnoreCase(txt) || "2".equals(txt)) level = 2;
+                        else if ("M".equalsIgnoreCase(txt) || "3".equals(txt)) level = 3;
+                        else if ("A".equalsIgnoreCase(txt) || "4".equals(txt)) level = 4;
+                    }
+
+                    final ProgramCourse targetPc = pc;
+                    final PerformanceIndicator targetPi = pi;
+                    Optional<CoursePiMap> existing = coursePiMapRepository.findByProgramCourseIdAndPiId(targetPc.getId(), targetPi.getId());
+                    if (level == null || level <= 0) {
+                        existing.ifPresent(coursePiMapRepository::delete);
+                    } else {
+                        CoursePiMap map = existing.orElseGet(() -> CoursePiMap.builder()
+                                .programCourse(targetPc)
+                                .performanceIndicator(targetPi)
+                                .build());
+                        map.setLevel(level);
+                        coursePiMapRepository.save(map);
+                    }
+                }
+            }
+            log.info("Successfully synced S6_MATRIX for program: {}", program.getName());
+        } catch (Exception e) {
+            log.error("Failed to sync S6_MATRIX data", e);
+        }
+    }
+
+    private void syncSyllabusDetails(Syllabus syllabus, String jsonStr, Long programId) {
+        if (jsonStr == null || jsonStr.isBlank()) return;
+        try {
+            JsonNode root = objectMapper.readTree(jsonStr);
+            if (root.has("courseDescription")) {
+                syllabus.setCourseDescription(root.get("courseDescription").asText(""));
+            }
+            if (root.has("knowledgeObjective") || root.has("skillsObjective")) {
+                Map<String, String> objMap = new HashMap<>();
+                if (root.has("knowledgeObjective")) objMap.put("knowledge", root.get("knowledgeObjective").asText(""));
+                if (root.has("skillsObjective")) objMap.put("skills", root.get("skillsObjective").asText(""));
+                syllabus.setCourseObjectives(objectMapper.writeValueAsString(objMap));
+            }
+            if (root.has("facilitiesRequirements")) {
+                syllabus.setFacilitiesRequirements(root.get("facilitiesRequirements").asText(""));
+            }
+            if (root.has("assessmentComponents")) {
+                syllabus.setAssessmentScheme(objectMapper.writeValueAsString(root.get("assessmentComponents")));
+            }
+            if (root.has("materials")) {
+                syllabus.setTextbooks(objectMapper.writeValueAsString(root.get("materials")));
+            }
+
+            if (syllabus.getId() != null && root.has("clos") && root.get("clos").isArray()) {
+                List<PerformanceIndicator> allPis = performanceIndicatorRepository.findAllByProgramId(programId);
+                Map<String, PerformanceIndicator> piByCode = allPis.stream()
+                        .collect(Collectors.toMap(PerformanceIndicator::getCode, p -> p, (a, b) -> a));
+
+                List<CourseLearningOutcome> savedClos = new ArrayList<>();
+                int idx = 1;
+                for (JsonNode cloNode : root.get("clos")) {
+                    String code = cloNode.has("code") ? cloNode.get("code").asText("CLO" + idx) : "CLO" + idx;
+                    String content = cloNode.has("content") ? cloNode.get("content").asText("") : "";
+                    String bloom = cloNode.has("bloomLevel") ? cloNode.get("bloomLevel").asText("APPLY") : "APPLY";
+
+                    final int currentOrder = idx;
+                    CourseLearningOutcome clo = courseLearningOutcomeRepository
+                            .findBySyllabusIdAndCodeAndDeletedFalse(syllabus.getId(), code)
+                            .orElseGet(() -> CourseLearningOutcome.builder().syllabus(syllabus).code(code).build());
+                    clo.setContent(content);
+                    clo.setBloomLevel(bloom);
+                    clo.setOrderIndex(currentOrder);
+                    clo.setDeleted(false);
+                    CourseLearningOutcome savedClo = courseLearningOutcomeRepository.save(clo);
+                    savedClos.add(savedClo);
+
+                    cloPiMapRepository.deleteAllByCloId(savedClo.getId());
+                    if (cloNode.has("mappedPlos") && cloNode.get("mappedPlos").isArray()) {
+                        for (JsonNode mappedPiNode : cloNode.get("mappedPlos")) {
+                            String piCode = mappedPiNode.asText("");
+                            PerformanceIndicator pi = piByCode.get(piCode);
+                            if (pi != null) {
+                                CloPiMap map = CloPiMap.builder()
+                                        .clo(savedClo)
+                                        .performanceIndicator(pi)
+                                        .build();
+                                cloPiMapRepository.save(map);
+                            }
+                        }
+                    }
+                    idx++;
+                }
+
+                List<CourseLearningOutcome> existingClos = courseLearningOutcomeRepository.findAllBySyllabusIdAndDeletedFalseOrderByOrderIndexAsc(syllabus.getId());
+                for (CourseLearningOutcome oldClo : existingClos) {
+                    if (savedClos.stream().noneMatch(c -> c.getId().equals(oldClo.getId()))) {
+                        cloPiMapRepository.deleteAllByCloId(oldClo.getId());
+                        courseLearningOutcomeRepository.delete(oldClo);
+                    }
+                }
+            }
+        } catch (Exception e) {
+            log.warn("Error syncing syllabus details and CLOs", e);
+        }
+    }
+
     private String extractScreenCode(String config) {
         try {
             if (config == null || config.isEmpty()) return null;
@@ -624,13 +804,20 @@ public class SurveyCampaignService {
                 .map(pc -> {
                     Optional<Syllabus> sylOpt = syllabusRepository.findFirstByProgramCourseIdAndDeletedFalseOrderByVersionDesc(pc.getId());
                     String status = sylOpt.map(Syllabus::getStatus).orElse("DRAFT");
+                    Course c = pc.getCourse();
                     return com.euni.backend.dto.SurveyCampaignCourseMetaDto.builder()
                             .id(pc.getId())
                             .stepId(null)
-                            .courseId(pc.getCourse().getId())
-                            .courseCode(pc.getCourse().getCode())
-                            .courseName(pc.getCourse().getName())
-                            .credits(pc.getCourse().getCredits())
+                            .courseId(c.getId())
+                            .courseCode(c.getCode())
+                            .courseName(c.getName())
+                            .courseNameEn(c.getNameEn())
+                            .credits(c.getCredits())
+                            .theoryCredits(c.getTheoryCredits())
+                            .practiceCredits(c.getPracticeCredits())
+                            .selfStudyHours(c.getSelfStudyHours())
+                            .semester(pc.getSemester())
+                            .departmentName(c.getDepartment() != null ? c.getDepartment().getName() : null)
                             .status(status)
                             .build();
                 })
@@ -675,15 +862,22 @@ public class SurveyCampaignService {
                         .build());
 
         String jsonOut = syllabus.getWeeklySchedule() != null ? syllabus.getWeeklySchedule() : "{}";
+        Course c = pc.getCourse();
 
         return com.euni.backend.dto.SurveyCampaignCourseDetailDto.builder()
                 .id(pc.getId())
                 .campaignId(campaignId)
                 .stepId(stepId)
-                .courseId(pc.getCourse().getId())
-                .courseCode(pc.getCourse().getCode())
-                .courseName(pc.getCourse().getName())
-                .credits(pc.getCourse().getCredits())
+                .courseId(c.getId())
+                .courseCode(c.getCode())
+                .courseName(c.getName())
+                .courseNameEn(c.getNameEn())
+                .credits(c.getCredits())
+                .theoryCredits(c.getTheoryCredits())
+                .practiceCredits(c.getPracticeCredits())
+                .selfStudyHours(c.getSelfStudyHours())
+                .semester(pc.getSemester())
+                .departmentName(c.getDepartment() != null ? c.getDepartment().getName() : null)
                 .status(syllabus.getStatus())
                 .syllabusData(jsonOut)
                 .createdAt(syllabus.getCreatedAt())
@@ -717,15 +911,29 @@ public class SurveyCampaignService {
 
         Syllabus saved = syllabusRepository.save(syllabus);
 
+        if (data.get("syllabusData") != null) {
+            syncSyllabusDetails(saved, data.get("syllabusData").toString(), campaign.getProgram().getId());
+        }
+
+        Course c = pc.getCourse();
+        String reviewNote = data.get("reviewNote") != null ? data.get("reviewNote").toString() : null;
+
         return com.euni.backend.dto.SurveyCampaignCourseDetailDto.builder()
                 .id(pc.getId())
                 .campaignId(campaignId)
                 .stepId(data.get("stepId") != null ? Long.valueOf(data.get("stepId").toString()) : null)
-                .courseId(pc.getCourse().getId())
-                .courseCode(pc.getCourse().getCode())
-                .courseName(pc.getCourse().getName())
-                .credits(pc.getCourse().getCredits())
+                .courseId(c.getId())
+                .courseCode(c.getCode())
+                .courseName(c.getName())
+                .courseNameEn(c.getNameEn())
+                .credits(c.getCredits())
+                .theoryCredits(c.getTheoryCredits())
+                .practiceCredits(c.getPracticeCredits())
+                .selfStudyHours(c.getSelfStudyHours())
+                .semester(pc.getSemester())
+                .departmentName(c.getDepartment() != null ? c.getDepartment().getName() : null)
                 .status(saved.getStatus())
+                .reviewNote(reviewNote)
                 .syllabusData(saved.getWeeklySchedule())
                 .createdAt(saved.getCreatedAt())
                 .updatedAt(saved.getUpdatedAt())
